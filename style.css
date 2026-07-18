@@ -1,0 +1,315 @@
+/* ==================================================
+   ФАЙЛ: style.css (ОЧИЩЕННАЯ ВЕРСИЯ)
+   ================================================== */
+
+/* --- ОБЩИЕ НАСТРОЙКИ --- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f0f2f5;
+    color: #333;
+    min-height: 100vh;
+}
+
+.container {
+    width: 100%;
+    max-width: 100%;
+    padding: 0 15px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* --- ШАПКА --- */
+.header {
+    background: #ffffff;
+    padding: 15px 25px;
+    border: 2px solid #ddd;
+    border-radius: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 0;
+    flex-wrap: wrap;
+    gap: 10px;
+    width: 100%;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.logo-img {
+    height: 40px;
+    width: auto;
+}
+
+.site-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1a2a4a;
+}
+
+.user-menu {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.user-menu .search-form {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.user-menu .search-form input[type="text"] {
+    padding: 4px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    width: 150px;
+}
+
+.user-menu .search-form input[type="text"]:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+}
+
+.user-menu .btn-profile {
+    background: transparent;
+    border: 1px solid #ccc;
+    color: #555;
+    padding: 5px 14px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 13px;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.user-menu .btn-profile:hover {
+    background: #f0f0f0;
+}
+
+/* --- ОСНОВНАЯ СТРАНИЦА (index.php) --- */
+.main {
+    flex: 1;
+    padding: 20px 0;
+    width: 100%;
+}
+
+.page-title {
+    font-size: 28px;
+    color: #1a2a4a;
+    margin-bottom: 30px;
+}
+
+.company-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 30px;
+}
+
+.company-card {
+    position: relative;
+    overflow: hidden;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 40px 25px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    text-decoration: none;
+    color: #333;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    border: 2px solid transparent;
+    min-height: 280px;
+    justify-content: center;
+}
+
+.company-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.15);
+    border-color: #007bff;
+}
+
+.company-card .company-logo-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.15;
+    z-index: 0;
+    border-radius: 16px;
+}
+
+.company-card .company-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.company-card .company-icon {
+    font-size: 56px;
+    margin-bottom: 12px;
+    z-index: 1;
+}
+
+.company-card .company-name {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1a2a4a;
+    margin-bottom: 8px;
+    z-index: 1;
+    background: rgba(255,255,255,0.85);
+    padding: 4px 16px;
+    border-radius: 6px;
+}
+
+.company-card .company-desc {
+    color: #555;
+    font-size: 15px;
+    margin-bottom: 14px;
+    flex: 1;
+    z-index: 1;
+    background: rgba(255,255,255,0.8);
+    padding: 4px 14px;
+    border-radius: 6px;
+    max-width: 90%;
+}
+
+.company-card .company-link {
+    font-weight: 600;
+    color: #007bff;
+    z-index: 1;
+    background: rgba(255,255,255,0.9);
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 15px;
+    transition: all 0.2s;
+}
+
+.company-card:hover .company-link {
+    background: #007bff;
+    color: #fff;
+}
+
+/* --- КНОПКИ --- */
+.btn {
+    display: inline-block;
+    padding: 8px 20px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 14px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: #fff;
+}
+.btn-primary:hover {
+    background: #0056b3;
+}
+
+.btn-sm {
+    padding: 5px 14px;
+    font-size: 13px;
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid #ccc;
+    color: #555;
+}
+.btn-outline:hover {
+    background: #f0f0f0;
+}
+
+.btn-success {
+    background: #28a745;
+    color: #fff;
+}
+.btn-success:hover {
+    background: #1e7e34;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: #fff;
+}
+.btn-danger:hover {
+    background: #bd2130;
+}
+
+.btn-publish {
+    background: #28a745;
+    color: #fff;
+}
+.btn-publish:hover {
+    background: #1e7e34;
+}
+.btn-publish.published {
+    background: #ffc107;
+    color: #333;
+}
+.btn-publish.published:hover {
+    background: #e0a800;
+}
+
+/* --- ПОДВАЛ --- */
+.footer {
+    text-align: center;
+    padding: 20px 0;
+    color: #999;
+    font-size: 13px;
+    margin-top: 20px;
+    width: 100%;
+}
+
+/* --- АДАПТИВНОСТЬ --- */
+@media (max-width: 768px) {
+    .header {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 10px 15px;
+    }
+    .user-menu {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .user-menu .search-form {
+        width: 100%;
+    }
+    .user-menu .search-form input[type="text"] {
+        flex: 1;
+        width: auto;
+    }
+    .company-grid {
+        grid-template-columns: 1fr;
+    }
+}

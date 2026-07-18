@@ -1,0 +1,24 @@
+# ==================================================
+# ФАЙЛ: uploads/.htaccess
+# НАЗНАЧЕНИЕ: Защита папки загрузок от выполнения PHP
+# ==================================================
+
+# Запрет выполнения PHP-скриптов в папке загрузок
+<FilesMatch "\.(php|phtml|php3|php4|php5|php7|phps|phar|cgi|pl)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+
+# Запрет просмотра содержимого папок
+Options -Indexes
+
+# Защита от XSS через заголовки
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# Запрет доступа к чувствительным файлам
+<FilesMatch "\.(sql|log|env|ini|conf|bak|backup)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>Options -Indexes 

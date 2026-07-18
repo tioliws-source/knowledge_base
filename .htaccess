@@ -1,0 +1,14 @@
+# Запрещаем просмотр папок
+Options -Indexes
+
+# Защищаем файлы конфигурации
+<Files "config.php">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+# Перенаправляем все запросы на index.php (красивые URL)
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . index.php [L]
