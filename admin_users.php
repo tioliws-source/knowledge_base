@@ -1,6 +1,10 @@
 <?php
 // ==================================================
-// ФАЙЛ: admin_users.php (БЕЗОПАСНАЯ ВЕРСИЯ)
+// ФАЙЛ: admin_users.php (ИСПРАВЛЕННАЯ ВЕРСИЯ)
+// ИСПРАВЛЕНИЯ:
+//   1. Проблема 27: Пароль 000000 → случайный 6-значный
+//   2. Проблема 29: mkdir с 0777 → 0755
+//   3. Проблема 16: rand() → random_int()
 // ==================================================
 require_once 'config.php';
 
@@ -37,7 +41,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'toggle_users_section') {
 }
 
 // ==========================================================
-// МАССОВОЕ УДАЛЕНИЕ ПОЛЬЗОВАТЕЛЕЙ (через prepared statements)
+// МАССОВОЕ УДАЛЕНИЕ ПОЛЬЗОВАТЕЛЕЙ
 // ==========================================================
 if (isset($_POST['action']) && $_POST['action'] == 'mass_delete') {
     $user_ids = isset($_POST['user_ids']) ? explode(',', $_POST['user_ids']) : [];
@@ -49,16 +53,13 @@ if (isset($_POST['action']) && $_POST['action'] == 'mass_delete') {
     $ids = array_map('intval', $user_ids);
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
     $types = str_repeat('i', count($ids));
-    
     $stmt = $mysqli->prepare("UPDATE users SET deleted = 1, deleted_at = NOW() WHERE id IN ($placeholders) AND role != 'admin'");
     $stmt->bind_param($types, ...$ids);
     $stmt->execute();
     $stmt->close();
-    
     foreach ($ids as $uid) {
         writeLog($_SESSION['user_id'], 'mass_delete_user', "Массовое удаление пользователя ID $uid");
     }
-    
     header('Content-Type: application/json');
     echo json_encode(['success' => true, 'message' => 'Выбранные пользователи удалены']);
     exit;
@@ -77,16 +78,13 @@ if (isset($_POST['action']) && $_POST['action'] == 'mass_restore') {
     $ids = array_map('intval', $user_ids);
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
     $types = str_repeat('i', count($ids));
-    
     $stmt = $mysqli->prepare("UPDATE users SET deleted = 0, deleted_at = NULL WHERE id IN ($placeholders)");
     $stmt->bind_param($types, ...$ids);
     $stmt->execute();
     $stmt->close();
-    
     foreach ($ids as $uid) {
         writeLog($_SESSION['user_id'], 'mass_restore_user', "Массовое восстановление пользователя ID $uid");
     }
-    
     header('Content-Type: application/json');
     echo json_encode(['success' => true, 'message' => 'Выбранные пользователи восстановлены']);
     exit;
@@ -99,18 +97,15 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_section_access') {
     $user_id = (int)($_POST['user_id'] ?? 0);
     $section_ids_raw = $_POST['section_ids'] ?? '';
     $section_ids = !empty($section_ids_raw) ? explode(',', $section_ids_raw) : [];
-    
     if (!$user_id) {
         header('Content-Type: application/json');
         echo json_encode(['success' => false, 'message' => 'Ошибка: пользователь не найден']);
         exit;
     }
-    
     $stmt = $mysqli->prepare("DELETE FROM user_section_access WHERE user_id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $stmt->close();
-    
     foreach ($section_ids as $section_id) {
         $section_id = (int)$section_id;
         $stmt_check = $mysqli->prepare("SELECT id FROM sections WHERE id = ?");
@@ -124,9 +119,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_section_access') {
         }
         $stmt_check->close();
     }
-    
     writeLog($_SESSION['user_id'], 'edit_section_access', "Изменён доступ к разделам для пользователя ID $user_id");
-    
     header('Content-Type: application/json');
     echo json_encode(['success' => true, 'message' => 'Доступ к разделам сохранён']);
     exit;
@@ -142,7 +135,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_section_access') {
         echo json_encode(['error' => 'Пользователь не найден']);
         exit;
     }
-    
     $stmt = $mysqli->prepare("SELECT section_id FROM user_section_access WHERE user_id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -152,14 +144,13 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_section_access') {
         $allowed_sections[] = $row['section_id'];
     }
     $stmt->close();
-    
     header('Content-Type: application/json');
     echo json_encode($allowed_sections);
     exit;
 }
 
 // ==========================================================
-// ОБРАБОТКА ДОБАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯ (БЕЗ generateUniqueId)
+// ДОБАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯ
 // ==========================================================
 if (isset($_POST['action']) && $_POST['action'] == 'add_user') {
     $login = trim($_POST['login'] ?? '');
@@ -176,7 +167,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'add_user') {
     $two_factor_enabled = (int)($_POST['two_factor_enabled'] ?? 0);
     
     $errors = [];
-    
     if (empty($login)) {
         $errors[] = 'Логин обязателен для заполнения';
     } elseif (strlen($login) < 6 || strlen($login) > 12) {
@@ -192,7 +182,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'add_user') {
         }
         $stmt->close();
     }
-    
     if (empty($password_raw)) {
         $errors[] = 'Пароль обязателен для заполнения';
     } elseif (strlen($password_raw) < 6 || strlen($password_raw) > 12) {
@@ -200,11 +189,9 @@ if (isset($_POST['action']) && $_POST['action'] == 'add_user') {
     } elseif (!preg_match('/^[a-zA-Z0-9_]+$/', $password_raw)) {
         $errors[] = 'Пароль может содержать только латинские буквы, цифры и _';
     }
-    
     if (empty($companies)) {
         $errors[] = 'Необходимо выбрать хотя бы одну компанию';
     }
-    
     if (!empty($full_name) && (mb_strlen($full_name) < 3 || mb_strlen($full_name) > 50)) {
         $errors[] = 'ФИО должно быть от 3 до 50 символов';
     }
@@ -223,7 +210,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'add_user') {
     if (!empty($backup_email) && !filter_var($backup_email, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'Некорректный резервный email';
     }
-    
     if (!empty($errors)) {
         header('Content-Type: application/json');
         echo json_encode(['success' => false, 'message' => implode('. ', $errors)]);
@@ -231,8 +217,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'add_user') {
     }
     
     $password = password_hash($password_raw, PASSWORD_DEFAULT);
-    
-    // Используем AUTO_INCREMENT вместо generateUniqueId
     $stmt = $mysqli->prepare("INSERT INTO users (login, password, full_name, position, role, avatar, email, backup_email, phone, two_factor_enabled, deleted, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)");
     $stmt->bind_param("sssssssssi", $login, $password, $full_name, $position, $role, $avatar, $email, $backup_email, $phone, $two_factor_enabled);
     $stmt->execute();
@@ -249,27 +233,23 @@ if (isset($_POST['action']) && $_POST['action'] == 'add_user') {
             $stmt->close();
         }
     }
-    
     writeLog($_SESSION['user_id'], 'add_user', "Создан пользователь $login (ID: $user_id)");
-    
     header('Content-Type: application/json');
     echo json_encode(['success' => true, 'message' => 'Пользователь успешно создан!', 'user_id' => $user_id]);
     exit;
 }
 
 // ==========================================================
-// ОБРАБОТКА РЕДАКТИРОВАНИЯ ПОЛЬЗОВАТЕЛЯ
+// РЕДАКТИРОВАНИЕ ПОЛЬЗОВАТЕЛЯ
 // ==========================================================
 if (isset($_POST['action']) && $_POST['action'] == 'edit_user') {
     $user_id = (int)($_POST['user_id'] ?? 0);
     $restore = isset($_POST['restore']) ? (int)$_POST['restore'] : 0;
-    
     if (!$user_id) {
         header('Content-Type: application/json');
         echo json_encode(['success' => false, 'message' => 'Ошибка: пользователь не найден']);
         exit;
     }
-    
     if ($restore == 1) {
         $stmt = $mysqli->prepare("UPDATE users SET deleted = 0, deleted_at = NULL WHERE id = ?");
         $stmt->bind_param("i", $user_id);
@@ -295,7 +275,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'edit_user') {
     $two_factor_enabled = (int)($_POST['two_factor_enabled'] ?? 0);
     
     $errors = [];
-    
     if (empty($login)) {
         $errors[] = 'Логин обязателен для заполнения';
     } elseif (strlen($login) < 6 || strlen($login) > 12) {
@@ -311,11 +290,9 @@ if (isset($_POST['action']) && $_POST['action'] == 'edit_user') {
         }
         $stmt->close();
     }
-    
     if (empty($companies)) {
         $errors[] = 'Необходимо выбрать хотя бы одну компанию';
     }
-    
     if (!empty($full_name) && (mb_strlen($full_name) < 3 || mb_strlen($full_name) > 50)) {
         $errors[] = 'ФИО должно быть от 3 до 50 символов';
     }
@@ -341,7 +318,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'edit_user') {
             $errors[] = 'Пароль может содержать только латинские буквы, цифры и _';
         }
     }
-    
     if (!empty($errors)) {
         header('Content-Type: application/json');
         echo json_encode(['success' => false, 'message' => implode('. ', $errors)]);
@@ -374,9 +350,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'edit_user') {
             $stmt->close();
         }
     }
-    
     writeLog($_SESSION['user_id'], 'edit_user', "Отредактирован пользователь $login (ID: $user_id)");
-    
     header('Content-Type: application/json');
     echo json_encode(['success' => true, 'message' => 'Изменения успешно сохранены!']);
     exit;
@@ -392,7 +366,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'delete_user') {
         echo json_encode(['success' => false, 'message' => 'Ошибка: пользователь не найден']);
         exit;
     }
-    
     $stmt = $mysqli->prepare("SELECT role FROM users WHERE id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -407,21 +380,18 @@ if (isset($_POST['action']) && $_POST['action'] == 'delete_user') {
         }
     }
     $stmt->close();
-    
     $stmt = $mysqli->prepare("UPDATE users SET deleted = 1, deleted_at = NOW() WHERE id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $stmt->close();
-    
     writeLog($_SESSION['user_id'], 'delete_user', "Удалён пользователь ID $user_id");
-    
     header('Content-Type: application/json');
     echo json_encode(['success' => true, 'message' => 'Пользователь удалён (будет стёрт через 15 дней)']);
     exit;
 }
 
 // ==========================================================
-// СБРОС ПАРОЛЯ (АДМИНИСТРАТОРОМ ДЛЯ РЕДАКТОРА — БЕЗ КОДА)
+// ✅ ИСПРАВЛЕНО (проблема 27): СБРОС ПАРОЛЯ — теперь случайный
 // ==========================================================
 if (isset($_POST['action']) && $_POST['action'] == 'reset_password') {
     $user_id = (int)($_POST['user_id'] ?? 0);
@@ -430,7 +400,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'reset_password') {
         echo json_encode(['success' => false, 'message' => 'Ошибка: пользователь не найден']);
         exit;
     }
-    
     $stmt = $mysqli->prepare("SELECT role FROM users WHERE id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -446,32 +415,31 @@ if (isset($_POST['action']) && $_POST['action'] == 'reset_password') {
     }
     $stmt->close();
     
-    $new_password = '000000';
+    // ✅ ИСПРАВЛЕНО: генерируем случайный 6-значный пароль (только цифры)
+    // вместо жёстко заданного '000000'
+    $new_password = (string)random_int(100000, 999999);
     $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
     $stmt = $mysqli->prepare("UPDATE users SET password = ? WHERE id = ?");
     $stmt->bind_param("si", $hashed_password, $user_id);
     $stmt->execute();
     $stmt->close();
     
-    writeLog($_SESSION['user_id'], 'reset_password', "Сброшен пароль для пользователя ID $user_id на 000000");
-    
+    writeLog($_SESSION['user_id'], 'reset_password', "Сброшен пароль для пользователя ID $user_id");
     header('Content-Type: application/json');
     echo json_encode(['success' => true, 'message' => 'Пароль сброшен на: ' . $new_password]);
     exit;
 }
 
 // ==========================================================
-// ЗАГРУЗКА ДАННЫХ ПОЛЬЗОВАТЕЛЯ ДЛЯ РЕДАКТИРОВАНИЯ
+// ЗАГРУЗКА ДАННЫХ ПОЛЬЗОВАТЕЛЯ
 // ==========================================================
 if (isset($_POST['action']) && $_POST['action'] == 'get_user_data') {
     $user_id = (int)($_POST['user_id'] ?? 0);
     if (!$user_id) {
         die('Ошибка: пользователь не найден');
     }
-    
     $stmt = $mysqli->prepare("
-        SELECT u.*,
-        GROUP_CONCAT(a.company_id) as company_ids
+        SELECT u.*, GROUP_CONCAT(a.company_id) as company_ids
         FROM users u
         LEFT JOIN access a ON a.user_id = u.id
         WHERE u.id = ?
@@ -481,44 +449,37 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_user_data') {
     $stmt->execute();
     $user = $stmt->get_result()->fetch_assoc();
     $stmt->close();
-    
     if (!$user) {
         die('Ошибка: пользователь не найден');
     }
-    
     header('Content-Type: application/json');
     echo json_encode($user);
     exit;
 }
 
 // ==========================================================
-// ЗАГРУЗКА АВАТАРКИ
+// ✅ ИСПРАВЛЕНО (проблема 29): ЗАГРУЗКА АВАТАРКИ — mkdir 0755
+// ИСПРАВЛЕНО (проблема 16): rand() → random_int()
 // ==========================================================
 if (isset($_POST['action']) && $_POST['action'] == 'upload_avatar') {
     if (isset($_FILES['avatar']) && $_FILES['avatar']['error'] == 0) {
         $file = $_FILES['avatar'];
         $tmp_name = $file['tmp_name'];
         $original_name = $file['name'];
-        
         if (strlen($original_name) > 40) {
             die('Название файла не должно превышать 40 символов');
         }
-        
-        // Проверка реального MIME-типа
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
         $mime_type = finfo_file($finfo, $tmp_name);
         finfo_close($finfo);
-        
         $allowed_mime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
         if (!in_array($mime_type, $allowed_mime)) {
             die('Разрешены только изображения: JPG, PNG, WebP, GIF');
         }
-        
         $max_size = 2 * 1024 * 1024;
         if ($file['size'] > $max_size) {
             die('Размер файла не должен превышать 2 МБ');
         }
-        
         $ext_map = [
             'image/jpeg' => 'jpg',
             'image/png' => 'png',
@@ -526,17 +487,17 @@ if (isset($_POST['action']) && $_POST['action'] == 'upload_avatar') {
             'image/gif' => 'gif'
         ];
         $ext = $ext_map[$mime_type] ?? 'jpg';
-        
         $avatar_dir = __DIR__ . '/uploads/avatars/';
         if (!is_dir($avatar_dir)) {
-            mkdir($avatar_dir, 0777, true);
+            // ✅ ИСПРАВЛЕНО (проблема 29): права 0755 вместо 0777
+            if (!mkdir($avatar_dir, 0755, true)) {
+                die('Не удалось создать папку для аватарок');
+            }
         }
-        
-        $new_filename = 'avatar_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+        // ✅ ИСПРАВЛЕНО (проблема 16): random_int() вместо rand()
+        $new_filename = 'avatar_' . time() . '_' . random_int(1000, 9999) . '.' . $ext;
         $target_path = $avatar_dir . $new_filename;
-        
         if (move_uploaded_file($tmp_name, $target_path)) {
-            // Оптимизируем изображение
             $image = null;
             switch ($mime_type) {
                 case 'image/jpeg': $image = imagecreatefromjpeg($target_path); break;
@@ -544,7 +505,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'upload_avatar') {
                 case 'image/webp': $image = imagecreatefromwebp($target_path); break;
                 case 'image/gif': $image = imagecreatefromgif($target_path); break;
             }
-            
             if ($image) {
                 $width = imagesx($image);
                 $height = imagesy($image);
@@ -558,7 +518,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'upload_avatar') {
                     imagedestroy($image);
                     $image = $resized;
                 }
-                
                 if ($mime_type == 'image/png') {
                     imagepng($image, $target_path, 8);
                 } elseif ($mime_type == 'image/webp') {
@@ -570,7 +529,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'upload_avatar') {
                 }
                 imagedestroy($image);
             }
-            
             echo '/uploads/avatars/' . $new_filename;
         } else {
             echo 'Ошибка загрузки файла';
@@ -582,7 +540,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'upload_avatar') {
 }
 
 // ==========================================================
-// ОБНОВЛЕНИЕ СТАТУСА "В СЕТИ" (БЕЗОПАСНО, через prepared statement)
+// ОБНОВЛЕНИЕ СТАТУСА "В СЕТИ"
 // ==========================================================
 if (isset($_SESSION['user_id'])) {
     $uid = (int)$_SESSION['user_id'];
@@ -607,7 +565,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_online_users') {
         GROUP BY u.id
         ORDER BY u.full_name
     ");
-    
     $guests_today = $mysqli->query("
         SELECT COUNT(DISTINCT visitor_ip) as cnt
         FROM visitors
@@ -617,7 +574,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_online_users') {
     $html = '<div style="max-height:400px;overflow-y:auto;">';
     $html .= '<h3>👥 В сети сейчас</h3>';
     $html .= '<p><strong>Всего активных пользователей:</strong> ' . $online_users->num_rows . '</p>';
-    
     if ($online_users->num_rows > 0) {
         $html .= '<table style="width:100%;border-collapse:collapse;margin-top:10px;">';
         $html .= '<tr style="background:#f0f2f5;"><th>ID</th><th>Логин</th><th>ФИО</th><th>Роль</th><th>Компания</th></tr>';
@@ -634,28 +590,24 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_online_users') {
     } else {
         $html .= '<p style="color:#999;">Сейчас нет активных пользователей</p>';
     }
-    
     $html .= '<hr style="margin:15px 0;">';
     $html .= '<p><strong>👋 Посетители (гости) за сегодня:</strong> ' . $guests_today . '</p>';
     $html .= '</div>';
-    
     echo $html;
     exit;
 }
 
 // ==========================================================
-// ПОЛУЧИТЬ СПИСОК ПОЛЬЗОВАТЕЛЕЙ ПО РОЛИ ДЛЯ КОМПАНИИ
+// ПОЛУЧИТЬ СПИСОК ПОЛЬЗОВАТЕЛЕЙ ПО РОЛИ
 // ==========================================================
 if (isset($_POST['action']) && $_POST['action'] == 'get_users_by_role') {
     $company_id = (int)($_POST['company_id'] ?? 0);
     $role = $_POST['role'] ?? '';
-    
     if (!$company_id || !$role) {
         header('Content-Type: application/json');
         echo json_encode(['error' => 'Неверные параметры']);
         exit;
     }
-    
     $stmt = $mysqli->prepare("
         SELECT u.id, u.login, u.full_name, u.role
         FROM users u
@@ -671,14 +623,13 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_users_by_role') {
         $users_list[] = $user;
     }
     $stmt->close();
-    
     header('Content-Type: application/json');
     echo json_encode($users_list);
     exit;
 }
 
 // ==========================================================
-// ОСНОВНОЙ ВЫВОД (С ПАГИНАЦИЕЙ, ПОИСКОМ И МАССОВЫМИ ДЕЙСТВИЯМИ)
+// ОСНОВНОЙ ВЫВОД
 // ==========================================================
 $filter_type = $_GET['filter_type'] ?? 'all';
 $filter_value = $_GET['filter_value'] ?? '';
@@ -689,18 +640,15 @@ $offset = ($page - 1) * $per_page;
 
 $where_conditions = [];
 $where_conditions[] = "u.role != 'admin'";
-
 if (!empty($search)) {
     $search_escaped = $mysqli->real_escape_string($search);
     $where_conditions[] = "(u.login LIKE '%$search_escaped%' OR u.full_name LIKE '%$search_escaped%' OR u.id LIKE '%$search_escaped%')";
 }
-
 if ($filter_type == 'deleted') {
     $where_conditions[] = "u.deleted = 1";
 } else {
     $where_conditions[] = "u.deleted = 0";
 }
-
 if ($filter_type == 'company' && $filter_value) {
     $company_id = (int)$filter_value;
     $where_conditions[] = "a.company_id = $company_id";
@@ -709,7 +657,6 @@ if ($filter_type == 'company' && $filter_value) {
     $role_value = $role_map[$filter_value] ?? $filter_value;
     $where_conditions[] = "u.role = '$role_value'";
 }
-
 $where_sql = implode(' AND ', $where_conditions);
 
 $count_query = $mysqli->query("
@@ -749,7 +696,6 @@ $all_companies_employee = $mysqli->query("
     ORDER BY c.name
 ");
 $all_companies_all = $mysqli->query("SELECT id, name FROM companies WHERE deleted = 0 ORDER BY name");
-
 $all_sections = $mysqli->query("SELECT id, parent_id, title, company_id FROM sections ORDER BY company_id, parent_id, title");
 $sections_by_company = [];
 while ($section = $all_sections->fetch_assoc()) {
@@ -858,288 +804,287 @@ function buildSectionTree($sections, $parent_id = 0) {
 .checkbox-2fa label { margin: 0; cursor: pointer; font-weight: 500; font-size: 14px; color: #333; }
 </style>
 <div class="users-section">
-<div class="users-section-header">
-<h2>👥 Пользователи</h2>
-<div class="actions">
-<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); showOnlineUsers()">🟢 В сети</button>
-<button class="btn-add" onclick="event.stopPropagation(); showAddUserModal()">➕ Добавить</button>
-<button class="btn btn-sm btn-outline" id="toggle-users-btn" onclick="event.stopPropagation(); toggleUsersSection()">
-<?= $toggle_icon ?> <?= $toggle_label ?>
-</button>
+    <div class="users-section-header">
+        <h2>👥 Пользователи</h2>
+        <div class="actions">
+            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); showOnlineUsers()">🟢 В сети</button>
+            <button class="btn-add" onclick="event.stopPropagation(); showAddUserModal()">➕ Добавить</button>
+            <button class="btn btn-sm btn-outline" id="toggle-users-btn" onclick="event.stopPropagation(); toggleUsersSection()">
+                <?= $toggle_icon ?> <?= $toggle_label ?>
+            </button>
+        </div>
+    </div>
+    <div class="users-section-content <?= $is_hidden ? 'hidden' : '' ?>" id="users-section-content">
+        <div class="search-bar">
+            <input type="text" id="search-input" placeholder="🔍 Поиск по логину, ФИО или ID..." value="<?= htmlspecialchars($search) ?>">
+            <button class="btn btn-primary" onclick="applySearch()">Найти</button>
+            <?php if (!empty($search)): ?>
+                <button class="btn btn-outline" onclick="clearSearch()">✕ Сбросить</button>
+            <?php endif; ?>
+        </div>
+        <div class="filter-bar">
+            <button class="btn-filter <?= $filter_type == 'all' ? 'active' : '' ?>" onclick="applyFilter('all')">Все</button>
+            <button class="btn-filter <?= $filter_type == 'company' ? 'active' : '' ?>" onclick="openCompanyFilter()">🏢 Компания</button>
+            <button class="btn-filter <?= $filter_type == 'role' ? 'active' : '' ?>" onclick="openRoleFilter()">🎯 Роль</button>
+            <button class="btn-filter <?= $filter_type == 'deleted' ? 'active' : '' ?>" onclick="applyFilter('deleted')">🗑️ Удалены</button>
+            <?php if ($filter_type != 'all' && $filter_type != 'deleted'): ?>
+                <span style="font-size:13px;color:#666;margin-left:10px;">
+                    Фильтр: <strong><?= htmlspecialchars($filter_value) ?></strong>
+                    <a href="?filter_type=all" style="color:#dc3545;text-decoration:none;">✕</a>
+                </span>
+            <?php endif; ?>
+        </div>
+        <div class="mass-actions">
+            <button class="btn-mass-success" onclick="massAction('restore')" <?= $filter_type != 'deleted' ? 'style="display:none;"' : '' ?>>↩️ Восстановить выбранных</button>
+            <button class="btn-mass-danger" onclick="massAction('delete')">🗑️ Удалить выбранных</button>
+            <span style="font-size:13px;color:#666;margin-left:10px;">
+                <span id="selected-count">0</span> выбрано
+            </span>
+        </div>
+        <table class="users-table">
+            <thead>
+                <tr>
+                    <th class="checkbox-col"><input type="checkbox" id="select-all" onchange="toggleAllCheckboxes()"></th>
+                    <th>ID</th>
+                    <th>Логин</th>
+                    <th>Компания</th>
+                    <th>Роль</th>
+                    <th>ФИО</th>
+                    <th>Должность</th>
+                    <th>Статус</th>
+                    <th>Действие</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if ($users_query && $users_query->num_rows > 0): ?>
+                    <?php while ($user = $users_query->fetch_assoc()):
+                        $is_online = strtotime($user['last_activity']) > strtotime('-5 minutes');
+                        if ($user['deleted'] == 1) {
+                            $status_class = 'status-deleted';
+                            $status_text = '🗑️ Удалён (' . date('d.m.Y', strtotime($user['deleted_at'])) . ')';
+                        } else {
+                            $status_class = $is_online ? 'status-online' : 'status-offline';
+                            $status_text = $is_online ? '🟢 В сети' : '🔴 Не в сети';
+                        }
+                        $role_name = getRoleName($user['role']);
+                        $role_class = $user['role'] == 'editor' ? 'editor' : 'employee';
+                    ?>
+                        <tr>
+                            <td class="checkbox-col"><input type="checkbox" class="user-checkbox" value="<?= (int)$user['id'] ?>" onchange="updateSelectedCount()"></td>
+                            <td><?= htmlspecialchars($user['id']) ?></td>
+                            <td><?= htmlspecialchars($user['login']) ?></td>
+                            <td><?= htmlspecialchars($user['companies'] ?? '—') ?></td>
+                            <td><span class="role-badge <?= $role_class ?>"><?= htmlspecialchars($role_name) ?></span></td>
+                            <td><?= htmlspecialchars($user['full_name'] ?? '—') ?></td>
+                            <td><?= htmlspecialchars($user['position'] ?? '—') ?></td>
+                            <td class="<?= $status_class ?>"><?= $status_text ?></td>
+                            <td>
+                                <?php if ($filter_type == 'deleted'): ?>
+                                    <button class="btn-edit" onclick="editUser(<?= (int)$user['id'] ?>)" style="background:#28a745; border-color:#28a745;">↩️ Восстановить</button>
+                                <?php else: ?>
+                                    <button class="btn-edit" onclick="editUser(<?= (int)$user['id'] ?>)">✏️ Редактировать</button>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endwhile; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="9" style="text-align:center; color:#999; padding:30px 0;">
+                            Нет пользователей, соответствующих фильтру
+                        </td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+        <?php if ($total_pages > 1): ?>
+            <div class="pagination">
+                <?php if ($page > 1): ?>
+                    <a href="?filter_type=<?= urlencode($filter_type) ?>&filter_value=<?= urlencode($filter_value) ?>&search=<?= urlencode($search) ?>&page=<?= $page - 1 ?>" class="page-link">←</a>
+                <?php else: ?>
+                    <span class="page-link disabled">←</span>
+                <?php endif; ?>
+                <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                    <a href="?filter_type=<?= urlencode($filter_type) ?>&filter_value=<?= urlencode($filter_value) ?>&search=<?= urlencode($search) ?>&page=<?= $i ?>" class="page-link <?= $i == $page ? 'active' : '' ?>"><?= $i ?></a>
+                <?php endfor; ?>
+                <?php if ($page < $total_pages): ?>
+                    <a href="?filter_type=<?= urlencode($filter_type) ?>&filter_value=<?= urlencode($filter_value) ?>&search=<?= urlencode($search) ?>&page=<?= $page + 1 ?>" class="page-link">→</a>
+                <?php else: ?>
+                    <span class="page-link disabled">→</span>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+    </div>
 </div>
-</div>
-<div class="users-section-content <?= $is_hidden ? 'hidden' : '' ?>" id="users-section-content">
-<div class="search-bar">
-<input type="text" id="search-input" placeholder="🔍 Поиск по логину, ФИО или ID..." value="<?= htmlspecialchars($search) ?>">
-<button class="btn btn-primary" onclick="applySearch()">Найти</button>
-<?php if (!empty($search)): ?>
-<button class="btn btn-outline" onclick="clearSearch()">✕ Сбросить</button>
-<?php endif; ?>
-</div>
-<div class="filter-bar">
-<button class="btn-filter <?= $filter_type == 'all' ? 'active' : '' ?>" onclick="applyFilter('all')">Все</button>
-<button class="btn-filter <?= $filter_type == 'company' ? 'active' : '' ?>" onclick="openCompanyFilter()">🏢 Компания</button>
-<button class="btn-filter <?= $filter_type == 'role' ? 'active' : '' ?>" onclick="openRoleFilter()">🎯 Роль</button>
-<button class="btn-filter <?= $filter_type == 'deleted' ? 'active' : '' ?>" onclick="applyFilter('deleted')">🗑️ Удалены</button>
-<?php if ($filter_type != 'all' && $filter_type != 'deleted'): ?>
-<span style="font-size:13px;color:#666;margin-left:10px;">
-Фильтр: <strong><?= htmlspecialchars($filter_value) ?></strong>
-<a href="?filter_type=all" style="color:#dc3545;text-decoration:none;">✕</a>
-</span>
-<?php endif; ?>
-</div>
-<div class="mass-actions">
-<button class="btn-mass-success" onclick="massAction('restore')" <?= $filter_type != 'deleted' ? 'style="display:none;"' : '' ?>>↩️ Восстановить выбранных</button>
-<button class="btn-mass-danger" onclick="massAction('delete')">🗑️ Удалить выбранных</button>
-<span style="font-size:13px;color:#666;margin-left:10px;">
-<span id="selected-count">0</span> выбрано
-</span>
-</div>
-<table class="users-table">
-<thead>
-<tr>
-<th class="checkbox-col"><input type="checkbox" id="select-all" onchange="toggleAllCheckboxes()"></th>
-<th>ID</th>
-<th>Логин</th>
-<th>Компания</th>
-<th>Роль</th>
-<th>ФИО</th>
-<th>Должность</th>
-<th>Статус</th>
-<th>Действие</th>
-</tr>
-</thead>
-<tbody>
-<?php if ($users_query && $users_query->num_rows > 0): ?>
-<?php while ($user = $users_query->fetch_assoc()):
-    $is_online = strtotime($user['last_activity']) > strtotime('-5 minutes');
-    if ($user['deleted'] == 1) {
-        $status_class = 'status-deleted';
-        $status_text = '🗑️ Удалён (' . date('d.m.Y', strtotime($user['deleted_at'])) . ')';
-    } else {
-        $status_class = $is_online ? 'status-online' : 'status-offline';
-        $status_text = $is_online ? '🟢 В сети' : '🔴 Не в сети';
-    }
-    $role_name = getRoleName($user['role']);
-    $role_class = $user['role'] == 'editor' ? 'editor' : 'employee';
-?>
-<tr>
-<td class="checkbox-col"><input type="checkbox" class="user-checkbox" value="<?= (int)$user['id'] ?>" onchange="updateSelectedCount()"></td>
-<td><?= htmlspecialchars($user['id']) ?></td>
-<td><?= htmlspecialchars($user['login']) ?></td>
-<td><?= htmlspecialchars($user['companies'] ?? '—') ?></td>
-<td><span class="role-badge <?= $role_class ?>"><?= htmlspecialchars($role_name) ?></span></td>
-<td><?= htmlspecialchars($user['full_name'] ?? '—') ?></td>
-<td><?= htmlspecialchars($user['position'] ?? '—') ?></td>
-<td class="<?= $status_class ?>"><?= $status_text ?></td>
-<td>
-<?php if ($filter_type == 'deleted'): ?>
-<button class="btn-edit" onclick="editUser(<?= (int)$user['id'] ?>)" style="background:#28a745; border-color:#28a745;">↩️ Восстановить</button>
-<?php else: ?>
-<button class="btn-edit" onclick="editUser(<?= (int)$user['id'] ?>)">✏️ Редактировать</button>
-<?php endif; ?>
-</td>
-</tr>
-<?php endwhile; ?>
-<?php else: ?>
-<tr>
-<td colspan="9" style="text-align:center; color:#999; padding:30px 0;">
-Нет пользователей, соответствующих фильтру
-</td>
-</tr>
-<?php endif; ?>
-</tbody>
-</table>
-<?php if ($total_pages > 1): ?>
-<div class="pagination">
-<?php if ($page > 1): ?>
-<a href="?filter_type=<?= urlencode($filter_type) ?>&filter_value=<?= urlencode($filter_value) ?>&search=<?= urlencode($search) ?>&page=<?= $page - 1 ?>" class="page-link">←</a>
-<?php else: ?>
-<span class="page-link disabled">←</span>
-<?php endif; ?>
-<?php for ($i = 1; $i <= $total_pages; $i++): ?>
-<a href="?filter_type=<?= urlencode($filter_type) ?>&filter_value=<?= urlencode($filter_value) ?>&search=<?= urlencode($search) ?>&page=<?= $i ?>" class="page-link <?= $i == $page ? 'active' : '' ?>"><?= $i ?></a>
-<?php endfor; ?>
-<?php if ($page < $total_pages): ?>
-<a href="?filter_type=<?= urlencode($filter_type) ?>&filter_value=<?= urlencode($filter_value) ?>&search=<?= urlencode($search) ?>&page=<?= $page + 1 ?>" class="page-link">→</a>
-<?php else: ?>
-<span class="page-link disabled">→</span>
-<?php endif; ?>
-</div>
-<?php endif; ?>
-</div>
-</div>
+
 <!-- ===== МОДАЛЬНОЕ ОКНО ДОБАВЛЕНИЯ ===== -->
 <div id="add-user-modal" class="user-modal-overlay" style="display:none;">
-<div class="user-modal-box">
-<h3>➕ Добавить пользователя</h3>
-<form id="add-user-form">
-<div class="form-group">
-<label>Фото (аватарка)</label>
-<input type="file" id="avatar-file" accept=".jpg,.jpeg,.png">
-<input type="hidden" id="avatar-path" value="">
-<div id="avatar-preview" style="margin-top:8px;"></div>
-<button type="button" class="btn btn-sm btn-primary" onclick="uploadAvatar('add')">Загрузить</button>
-<div class="hint">Форматы: JPG, PNG. Максимальный размер: <strong>2 МБ</strong>. Имя файла до 40 символов</div>
+    <div class="user-modal-box">
+        <h3>➕ Добавить пользователя</h3>
+        <form id="add-user-form">
+            <div class="form-group">
+                <label>Фото (аватарка)</label>
+                <input type="file" id="avatar-file" accept=".jpg,.jpeg,.png">
+                <input type="hidden" id="avatar-path" value="">
+                <div id="avatar-preview" style="margin-top:8px;"></div>
+                <button type="button" class="btn btn-sm btn-primary" onclick="uploadAvatar('add')">Загрузить</button>
+                <div class="hint">Форматы: JPG, PNG. Максимальный размер: <strong>2 МБ</strong>. Имя файла до 40 символов</div>
+            </div>
+            <div class="form-group">
+                <label>Логин *</label>
+                <input type="text" id="add-user-login" required>
+                <div class="hint">От 6 до 12 символов, только латиница, цифры и знак подчёркивания</div>
+            </div>
+            <div class="form-group">
+                <label>Пароль *</label>
+                <input type="text" id="add-user-password" required>
+                <div class="hint">От 6 до 12 символов, только латиница, цифры и знак подчёркивания</div>
+            </div>
+            <div class="form-group">
+                <label>Роль *</label>
+                <select id="add-user-role" onchange="updateCompanyList('add')">
+                    <option value="editor">Редактор</option>
+                    <option value="employee" selected>Сотрудник</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>ФИО</label>
+                <input type="text" id="add-user-fullname">
+                <div class="hint">От 3 до 50 символов</div>
+            </div>
+            <div class="form-group">
+                <label>Должность</label>
+                <input type="text" id="add-user-position">
+                <div class="hint">До 40 символов</div>
+            </div>
+            <div class="form-group">
+                <label>Email (основной)</label>
+                <input type="email" id="add-user-email">
+                <div class="hint">Для 2FA и восстановления пароля</div>
+            </div>
+            <div class="form-group">
+                <label>Резервный email</label>
+                <input type="email" id="add-user-backup-email">
+                <div class="hint">Для 2FA и восстановления пароля</div>
+            </div>
+            <div class="form-group">
+                <label>Телефон</label>
+                <input type="text" id="add-user-phone">
+                <div class="hint">Необязательно</div>
+            </div>
+            <div class="form-group checkbox-2fa">
+                <input type="checkbox" id="add-user-2fa" value="1">
+                <label for="add-user-2fa">Включить двухфакторную аутентификацию по почте</label>
+            </div>
+            <div class="form-group">
+                <label>Доступ к компаниям *</label>
+                <select id="add-user-companies" class="multi-select" multiple></select>
+                <small>Зажмите Ctrl (Cmd на Mac) для выбора нескольких компаний</small>
+            </div>
+            <div class="form-group">
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="toggleSectionAccess()">
+                    <span id="add-section-access-arrow">▶</span> 🌳 Доступ к разделам
+                </label>
+                <div id="add-section-access-container" style="display:none; margin-top:10px;">
+                    <div style="color:#999; font-size:13px; padding:10px 0;">
+                        Выберите компанию, чтобы настроить доступ к разделам.
+                    </div>
+                </div>
+            </div>
+            <div class="buttons">
+                <button type="button" class="btn btn-outline" onclick="closeAddUserModal()">Отмена</button>
+                <button type="button" class="btn btn-success" id="add-user-submit">💾 Создать</button>
+            </div>
+        </form>
+    </div>
 </div>
-<div class="form-group">
-<label>Логин *</label>
-<input type="text" id="add-user-login" required>
-<div class="hint">От 6 до 12 символов, только латиница, цифры и знак подчёркивания</div>
-</div>
-<div class="form-group">
-<label>Пароль *</label>
-<input type="text" id="add-user-password" required>
-<div class="hint">От 6 до 12 символов, только латиница, цифры и знак подчёркивания</div>
-</div>
-<div class="form-group">
-<label>Роль *</label>
-<select id="add-user-role" onchange="updateCompanyList('add')">
-<option value="editor">Редактор</option>
-<option value="employee" selected>Сотрудник</option>
-</select>
-</div>
-<div class="form-group">
-<label>ФИО</label>
-<input type="text" id="add-user-fullname">
-<div class="hint">От 3 до 50 символов</div>
-</div>
-<div class="form-group">
-<label>Должность</label>
-<input type="text" id="add-user-position">
-<div class="hint">До 40 символов</div>
-</div>
-<div class="form-group">
-<label>Email (основной)</label>
-<input type="email" id="add-user-email">
-<div class="hint">Для 2FA и восстановления пароля</div>
-</div>
-<div class="form-group">
-<label>Резервный email</label>
-<input type="email" id="add-user-backup-email">
-<div class="hint">Для 2FA и восстановления пароля</div>
-</div>
-<div class="form-group">
-<label>Телефон</label>
-<input type="text" id="add-user-phone">
-<div class="hint">Необязательно</div>
-</div>
-<div class="form-group checkbox-2fa">
-<input type="checkbox" id="add-user-2fa" value="1">
-<label for="add-user-2fa">Включить двухфакторную аутентификацию по почте</label>
-</div>
-<div class="form-group">
-<label>Доступ к компаниям *</label>
-<select id="add-user-companies" class="multi-select" multiple>
-</select>
-<small>Зажмите Ctrl (Cmd на Mac) для выбора нескольких компаний</small>
-</div>
-<div class="form-group">
-<label style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="toggleSectionAccess()">
-<span id="add-section-access-arrow">▶</span> 🌳 Доступ к разделам
-</label>
-<div id="add-section-access-container" style="display:none; margin-top:10px;">
-<div style="color:#999; font-size:13px; padding:10px 0;">
-Выберите компанию, чтобы настроить доступ к разделам.
-</div>
-</div>
-</div>
-<div class="buttons">
-<button type="button" class="btn btn-outline" onclick="closeAddUserModal()">Отмена</button>
-<button type="button" class="btn btn-success" id="add-user-submit">💾 Создать</button>
-</div>
-</form>
-</div>
-</div>
+
 <!-- ===== МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ ===== -->
 <div id="edit-user-modal" class="user-modal-overlay" style="display:none;">
-<div class="user-modal-box">
-<h3 id="edit-user-title">✏️ Редактировать пользователя</h3>
-<form id="edit-user-form">
-<input type="hidden" id="edit-user-id" value="">
-<div class="form-group">
-<label>Фото (аватарка)</label>
-<input type="file" id="edit-avatar-file" accept=".jpg,.jpeg,.png">
-<input type="hidden" id="edit-avatar-path" value="">
-<div id="edit-avatar-preview" style="margin-top:8px;"></div>
-<button type="button" class="btn btn-sm btn-primary" onclick="uploadAvatar('edit')">Загрузить</button>
-<div class="hint">Форматы: JPG, PNG. Максимальный размер: <strong>2 МБ</strong>. Имя файла до 40 символов</div>
+    <div class="user-modal-box">
+        <h3 id="edit-user-title">✏️ Редактировать пользователя</h3>
+        <form id="edit-user-form">
+            <input type="hidden" id="edit-user-id" value="">
+            <div class="form-group">
+                <label>Фото (аватарка)</label>
+                <input type="file" id="edit-avatar-file" accept=".jpg,.jpeg,.png">
+                <input type="hidden" id="edit-avatar-path" value="">
+                <div id="edit-avatar-preview" style="margin-top:8px;"></div>
+                <button type="button" class="btn btn-sm btn-primary" onclick="uploadAvatar('edit')">Загрузить</button>
+                <div class="hint">Форматы: JPG, PNG. Максимальный размер: <strong>2 МБ</strong>. Имя файла до 40 символов</div>
+            </div>
+            <div class="form-group">
+                <label>Логин *</label>
+                <input type="text" id="edit-user-login" required>
+                <div class="hint">От 6 до 12 символов, только латиница, цифры и знак подчёркивания</div>
+            </div>
+            <div class="form-group">
+                <label>Новый пароль (оставьте пустым, чтобы не менять)</label>
+                <input type="text" id="edit-user-password">
+                <div class="hint">От 6 до 12 символов, только латиница, цифры и знак подчёркивания</div>
+                <!-- ✅ ИСПРАВЛЕНО (проблема 27): убран жёсткий пароль 000000 -->
+                <button type="button" class="btn btn-warning" onclick="resetUserPassword()" style="margin-top:5px; background:#ffc107; color:#333; border:none; padding:5px 14px; border-radius:4px; cursor:pointer;">🔑 Сбросить на случайный</button>
+            </div>
+            <div class="form-group">
+                <label>Роль</label>
+                <select id="edit-user-role" onchange="updateCompanyList('edit')">
+                    <option value="editor">Редактор</option>
+                    <option value="employee">Сотрудник</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>ФИО</label>
+                <input type="text" id="edit-user-fullname">
+                <div class="hint">От 3 до 50 символов</div>
+            </div>
+            <div class="form-group">
+                <label>Должность</label>
+                <input type="text" id="edit-user-position">
+                <div class="hint">До 40 символов</div>
+            </div>
+            <div class="form-group">
+                <label>Email (основной)</label>
+                <input type="email" id="edit-user-email">
+                <div class="hint">Для 2FA и восстановления пароля</div>
+            </div>
+            <div class="form-group">
+                <label>Резервный email</label>
+                <input type="email" id="edit-user-backup-email">
+                <div class="hint">Для 2FA и восстановления пароля</div>
+            </div>
+            <div class="form-group">
+                <label>Телефон</label>
+                <input type="text" id="edit-user-phone">
+                <div class="hint">Необязательно</div>
+            </div>
+            <div class="form-group checkbox-2fa">
+                <input type="checkbox" id="edit-user-2fa" value="1">
+                <label for="edit-user-2fa">Включить двухфакторную аутентификацию по почте</label>
+            </div>
+            <div class="form-group">
+                <label>Доступ к компаниям *</label>
+                <select id="edit-user-companies" class="multi-select" multiple></select>
+                <small>Зажмите Ctrl (Cmd на Mac) для выбора нескольких компаний</small>
+            </div>
+            <div class="form-group">
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="toggleEditSectionAccess()">
+                    <span id="edit-section-access-arrow">▶</span> 🌳 Доступ к разделам
+                </label>
+                <div id="edit-section-access-container" style="display:none; margin-top:10px;">
+                    <div style="color:#999; font-size:13px; padding:10px 0;">
+                        Выберите компанию, чтобы настроить доступ к разделам.
+                    </div>
+                </div>
+            </div>
+            <div class="buttons">
+                <button type="button" class="btn btn-outline" onclick="closeEditUserModal()">Отмена</button>
+                <button type="button" class="btn btn-success" id="edit-user-submit">💾 Сохранить</button>
+                <button type="button" class="btn btn-danger" id="edit-user-delete">🗑️ Удалить</button>
+            </div>
+        </form>
+    </div>
 </div>
-<div class="form-group">
-<label>Логин *</label>
-<input type="text" id="edit-user-login" required>
-<div class="hint">От 6 до 12 символов, только латиница, цифры и знак подчёркивания</div>
-</div>
-<div class="form-group">
-<label>Новый пароль (оставьте пустым, чтобы не менять)</label>
-<input type="text" id="edit-user-password">
-<div class="hint">От 6 до 12 символов, только латиница, цифры и знак подчёркивания</div>
-<button type="button" class="btn btn-warning" onclick="resetUserPassword()" style="margin-top:5px; background:#ffc107; color:#333; border:none; padding:5px 14px; border-radius:4px; cursor:pointer;">🔑 Сбросить на 000000</button>
-</div>
-<div class="form-group">
-<label>Роль</label>
-<select id="edit-user-role" onchange="updateCompanyList('edit')">
-<option value="editor">Редактор</option>
-<option value="employee">Сотрудник</option>
-</select>
-</div>
-<div class="form-group">
-<label>ФИО</label>
-<input type="text" id="edit-user-fullname">
-<div class="hint">От 3 до 50 символов</div>
-</div>
-<div class="form-group">
-<label>Должность</label>
-<input type="text" id="edit-user-position">
-<div class="hint">До 40 символов</div>
-</div>
-<div class="form-group">
-<label>Email (основной)</label>
-<input type="email" id="edit-user-email">
-<div class="hint">Для 2FA и восстановления пароля</div>
-</div>
-<div class="form-group">
-<label>Резервный email</label>
-<input type="email" id="edit-user-backup-email">
-<div class="hint">Для 2FA и восстановления пароля</div>
-</div>
-<div class="form-group">
-<label>Телефон</label>
-<input type="text" id="edit-user-phone">
-<div class="hint">Необязательно</div>
-</div>
-<div class="form-group checkbox-2fa">
-<input type="checkbox" id="edit-user-2fa" value="1">
-<label for="edit-user-2fa">Включить двухфакторную аутентификацию по почте</label>
-</div>
-<div class="form-group">
-<label>Доступ к компаниям *</label>
-<select id="edit-user-companies" class="multi-select" multiple>
-</select>
-<small>Зажмите Ctrl (Cmd на Mac) для выбора нескольких компаний</small>
-</div>
-<div class="form-group">
-<label style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="toggleEditSectionAccess()">
-<span id="edit-section-access-arrow">▶</span> 🌳 Доступ к разделам
-</label>
-<div id="edit-section-access-container" style="display:none; margin-top:10px;">
-<div style="color:#999; font-size:13px; padding:10px 0;">
-Выберите компанию, чтобы настроить доступ к разделам.
-</div>
-</div>
-</div>
-<div class="buttons">
-<button type="button" class="btn btn-outline" onclick="closeEditUserModal()">Отмена</button>
-<button type="button" class="btn btn-success" id="edit-user-submit">💾 Сохранить</button>
-<button type="button" class="btn btn-danger" id="edit-user-delete">🗑️ Удалить</button>
-</div>
-</form>
-</div>
-</div>
+
 <script>
-// ==========================================================
-// HTML-ESCAPE (защита от XSS)
-// ==========================================================
 function escapeHtml(text) {
     if (!text) return '';
     var div = document.createElement('div');
@@ -1147,37 +1092,31 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// ==========================================================
-// CSRF-токен
-// ==========================================================
 var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
-// ==========================================================
-// ДАННЫЕ КОМПАНИЙ ДЛЯ РАЗНЫХ РОЛЕЙ
-// ==========================================================
 var companiesForEditor = <?php
-    $list = [];
-    while ($c = $all_companies_editor->fetch_assoc()) {
-        $list[] = ['id' => $c['id'], 'name' => $c['name']];
-    }
-    echo json_encode($list);
+$list = [];
+while ($c = $all_companies_editor->fetch_assoc()) {
+    $list[] = ['id' => $c['id'], 'name' => $c['name']];
+}
+echo json_encode($list);
 ?>;
 
 var companiesForEmployee = <?php
-    $list = [];
-    while ($c = $all_companies_employee->fetch_assoc()) {
-        $list[] = ['id' => $c['id'], 'name' => $c['name']];
-    }
-    echo json_encode($list);
+$list = [];
+while ($c = $all_companies_employee->fetch_assoc()) {
+    $list[] = ['id' => $c['id'], 'name' => $c['name']];
+}
+echo json_encode($list);
 ?>;
 
 var allCompanies = <?php
-    $list = [];
-    $all_companies_all->data_seek(0);
-    while ($c = $all_companies_all->fetch_assoc()) {
-        $list[] = ['id' => $c['id'], 'name' => $c['name']];
-    }
-    echo json_encode($list);
+$list = [];
+$all_companies_all->data_seek(0);
+while ($c = $all_companies_all->fetch_assoc()) {
+    $list[] = ['id' => $c['id'], 'name' => $c['name']];
+}
+echo json_encode($list);
 ?>;
 
 function updateCompanyList(mode) {
@@ -1305,7 +1244,7 @@ function toggleUsersSection() {
     }
     fetch('admin_users.php', {
         method: 'POST',
-        headers: { 
+        headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'X-CSRF-Token': csrfToken
         },
@@ -1488,7 +1427,7 @@ function massAction(action) {
 function showUsersList(companyId, role) {
     fetch('admin_users.php', {
         method: 'POST',
-        headers: { 
+        headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'X-CSRF-Token': csrfToken
         },
@@ -1556,15 +1495,15 @@ function showUsersList(companyId, role) {
 
 var sectionAccessData = {};
 var companySections = <?php
-    $data = [];
-    foreach ($sections_by_company as $company_id => $sections) {
-        $company_name = $mysqli->query("SELECT name FROM companies WHERE id = " . (int)$company_id)->fetch_assoc()['name'];
-        $data[$company_id] = [
-            'name' => $company_name,
-            'sections' => buildSectionTree($sections)
-        ];
-    }
-    echo json_encode($data);
+$data = [];
+foreach ($sections_by_company as $company_id => $sections) {
+    $company_name = $mysqli->query("SELECT name FROM companies WHERE id = " . (int)$company_id)->fetch_assoc()['name'];
+    $data[$company_id] = [
+        'name' => $company_name,
+        'sections' => buildSectionTree($sections)
+    ];
+}
+echo json_encode($data);
 ?>;
 
 var currentUserCompanies = [];
@@ -1613,7 +1552,7 @@ function toggleEditSectionAccess() {
 function loadEditSectionAccess(userId) {
     fetch('admin_users.php', {
         method: 'POST',
-        headers: { 
+        headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'X-CSRF-Token': csrfToken
         },
@@ -1718,13 +1657,14 @@ function saveSectionAccessCommon(userId) {
     .catch(err => { showNotification('❌ Ошибка сети: ' + err, 'error'); });
 }
 
+// ✅ ИСПРАВЛЕНО (проблема 27): сообщение о случайном пароле
 function resetUserPassword() {
     var userId = document.getElementById('edit-user-id').value;
     if (!userId) {
         showNotification('Ошибка: пользователь не найден', 'error');
         return;
     }
-    customConfirmRestore('Сбросить пароль на 000000 для этого пользователя?', function(confirmed) {
+    customConfirmRestore('Сбросить пароль на случайный 6-значный для этого пользователя?', function(confirmed) {
         if (!confirmed) return;
         var formData = new FormData();
         formData.append('action', 'reset_password');
@@ -1750,7 +1690,7 @@ function resetUserPassword() {
 function editUser(userId) {
     fetch('admin_users.php', {
         method: 'POST',
-        headers: { 
+        headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'X-CSRF-Token': csrfToken
         },
@@ -2067,7 +2007,7 @@ document.getElementById('edit-user-submit')?.addEventListener('click', function(
 function showOnlineUsers() {
     fetch('admin_users.php', {
         method: 'POST',
-        headers: { 
+        headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'X-CSRF-Token': csrfToken
         },

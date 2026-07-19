@@ -1,6 +1,11 @@
 <?php
 // ==================================================
-// ФАЙЛ: get_tree.php (БЕЗОПАСНАЯ ВЕРСИЯ)
+// ФАЙЛ: get_tree.php (ИСПРАВЛЕННАЯ ВЕРСИЯ)
+// НАЗНАЧЕНИЕ: Получение дерева разделов компании (AJAX)
+// ИСПРАВЛЕНИЯ:
+//   1. Проблема 7: Убран вызов несуществующей функции selectBZItem()
+//      Теперь обработчики событий навешиваются через JavaScript
+//      в вызывающем файле (view.php через attachTreeEvents)
 // ==================================================
 require_once 'config.php';
 
@@ -103,6 +108,7 @@ function hasDraftInSubtree($node) {
 function renderTree($tree, $company_id, $can_edit, $prefix = '', $level = 0, $no_edit = false) {
     $html = '<ul style="list-style:none;padding-left:' . ($level * 20) . 'px;margin:0;">';
     $index = 1;
+    
     foreach ($tree as $node) {
         $current_number = $prefix ? $prefix . '.' . $index : (string)$index;
         $has_children = isset($node['children']) && count($node['children']) > 0;
@@ -110,6 +116,7 @@ function renderTree($tree, $company_id, $can_edit, $prefix = '', $level = 0, $no
         $has_draft_in_subtree = $has_children && hasDraftInSubtree($node);
         $color = '#333';
         $pencil = '';
+        
         if ($can_edit && !$no_edit) {
             if ($is_draft) {
                 $color = '#999';
@@ -118,26 +125,36 @@ function renderTree($tree, $company_id, $can_edit, $prefix = '', $level = 0, $no
                 $pencil = '✏️ ';
             }
         }
+        
         $display_style = ($has_children && isActivePath($node['id'])) ? 'block' : 'none';
+        
         $html .= '<li class="' . ($is_draft && $can_edit && !$no_edit ? 'draft' : '') . '" data-id="' . $node['id'] . '" style="padding:4px 0;display:flex;align-items:center;gap:5px;flex-wrap:wrap;position:relative;">';
         $html .= '<span class="tree-number" style="font-weight:600;color:#333;margin-right:4px;font-size:20px;">' . $current_number . '.</span>';
-        $html .= '<a href="#" onclick="selectBZItem(this); return false;" class="tree-link" data-id="' . $node['id'] . '" style="text-decoration:none;color:' . $color . ';font-size:21px;font-weight:normal;font-style:normal;word-wrap:break-word;max-width:100%;' . ($no_edit ? 'cursor:pointer;' : '') . '">';
+        
+        // ✅ ИСПРАВЛЕНО (проблема 7): убран onclick="selectBZItem(this); return false;"
+        // Теперь обработчики навешиваются через JavaScript в вызывающем файле
+        $html .= '<a href="#" class="tree-link" data-id="' . $node['id'] . '" style="text-decoration:none;color:' . $color . ';font-size:21px;font-weight:normal;font-style:normal;word-wrap:break-word;max-width:100%;' . ($no_edit ? 'cursor:pointer;' : '') . '">';
         $html .= ($has_children ? '📂 ' : '📄 ') . $pencil . htmlspecialchars($node['title']);
         $html .= '</a>';
+        
         if ($has_children) {
-            $html .= '<span class="toggle" onclick="toggleTree(this)" style="cursor:pointer;color:#007bff;font-size:19px;margin-left:6px;">▼</span>';
+            $html .= '<span class="toggle" style="cursor:pointer;color:#007bff;font-size:19px;margin-left:6px;">▼</span>';
         }
+        
         if ($can_edit && !$no_edit) {
             $html .= '<span class="add-child-btn" data-parent="' . $node['id'] . '" style="cursor:pointer;color:#28a745;font-weight:bold;font-size:23px;background:none;border:none;padding:0 4px;margin-left:auto;">+</span>';
         }
+        
         if ($has_children) {
             $html .= '<div class="sub-tree" style="display:' . $display_style . ';width:100%;">';
             $html .= renderTree($node['children'], $company_id, $can_edit, $current_number, $level + 1, $no_edit);
             $html .= '</div>';
         }
+        
         $html .= '</li>';
         $index++;
     }
+    
     $html .= '</ul>';
     return $html;
 }

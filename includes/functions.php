@@ -1,7 +1,10 @@
 <?php
 // ==================================================
-// ФАЙЛ: includes/functions.php
+// ФАЙЛ: includes/functions.php (ИСПРАВЛЕННАЯ ВЕРСИЯ)
 // НАЗНАЧЕНИЕ: Общие защитные функции системы
+// ИСПРАВЛЕНИЯ:
+//   1. rand() → random_int() (криптографическая безопасность)
+//   2. sanitizeHtml — добавлена фильтрация style-атрибутов
 // ==================================================
 
 // ==========================================================
@@ -28,15 +31,15 @@ function csrfField() {
 
 // ==========================================================
 // ЗАЩИТА ОТ XSS (очистка HTML от опасных тегов)
+// ИСПРАВЛЕНО: добавлена фильтрация style-атрибутов
 // ==========================================================
-
 function sanitizeHtml($html) {
     if (empty($html)) return '';
     
     // Разрешённые теги для TinyMCE
     $allowed_tags = '<p><br><strong><em><u><s><ul><ol><li><h1><h2><h3><h4><h5><h6>'
-                  . '<a><img><table><tbody><tr><td><th><thead><blockquote><pre><code>'
-                  . '<span><div><hr><sub><sup><font><b><i>';
+        . '<a><img><table><tbody><tr><td><th><thead><blockquote><pre><code>'
+        . '<span><div><hr><sub><sup><font><b><i>';
     
     $clean = strip_tags($html, $allowed_tags);
     
@@ -45,6 +48,8 @@ function sanitizeHtml($html) {
     $clean = preg_replace('/\s+on\w+\s*=\s*[^\s>]*/i', '', $clean);
     $clean = preg_replace('/href\s*=\s*["\']?\s*javascript:/i', 'href="', $clean);
     $clean = preg_replace('/src\s*=\s*["\']?\s*javascript:/i', 'src="', $clean);
+    
+    // Удаляем опасные теги
     $clean = preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $clean);
     $clean = preg_replace('/<iframe\b[^>]*>.*?<\/iframe>/is', '', $clean);
     $clean = preg_replace('/<object\b[^>]*>.*?<\/object>/is', '', $clean);
@@ -53,17 +58,43 @@ function sanitizeHtml($html) {
     $clean = preg_replace('/<input\b[^>]*>/is', '', $clean);
     $clean = preg_replace('/<button\b[^>]*>.*?<\/button>/is', '', $clean);
     
+    // ИСПРАВЛЕНО: Фильтрация style-атрибутов (защита от XSS через CSS)
+    // Удаляем style с опасными значениями
+    $clean = preg_replace_callback('/style\s*=\s*["\']([^"\']*)["\']/i', function($matches) {
+        $style = $matches[1];
+        
+        // Удаляем опасные CSS-свойства
+        $dangerous_patterns = [
+            '/expression\s*\(/i',           // IE expression()
+            '/javascript\s*:/i',            // javascript: URL
+            '/url\s*\(\s*["\']?\s*javascript:/i',  // url(javascript:)
+            '/behavior\s*:/i',              // CSS behavior
+            '/-moz-binding\s*:/i',          // Firefox binding
+            '/import\s+url/i',              // @import
+            '/data\s*:\s*text\/html/i',     // data: URL
+        ];
+        
+        foreach ($dangerous_patterns as $pattern) {
+            if (preg_match($pattern, $style)) {
+                return ''; // Удаляем весь style-атрибут
+            }
+        }
+        
+        return $matches[0]; // Возвращаем безопасный style
+    }, $clean);
+    
     return $clean;
 }
 
 // ==========================================================
 // ЗАЩИТА ОТ PATH TRAVERSAL (защита от скачивания чужих файлов)
 // ==========================================================
-
 function isPathSafe($filepath, $base_dir) {
     $real_base = realpath($base_dir);
     $real_path = realpath($filepath);
+    
     if ($real_path === false || $real_base === false) return false;
+    
     return strpos($real_path, $real_base) === 0;
 }
 
@@ -89,6 +120,7 @@ function checkLoginAttempts($ip, $max_attempts = 5, $window_minutes = 15) {
     $stmt->execute();
     $result = $stmt->get_result()->fetch_assoc();
     $stmt->close();
+    
     return $result['cnt'] < $max_attempts;
 }
 
@@ -119,9 +151,18 @@ function clearLoginAttempts($ip) {
 }
 
 // ==========================================================
+// ГЕНЕРАЦИЯ БЕЗОПАСНЫХ СЛУЧАЙНЫХ ЧИСЕЛ
+// ИСПРАВЛЕНО: используем random_int() вместо rand()
+// ==========================================================
+function generateSecureCode($length = 6) {
+    $min = pow(10, $length - 1);
+    $max = pow(10, $length) - 1;
+    return random_int($min, $max);
+}
+
+// ==========================================================
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ПРОВЕРКИ РОЛЕЙ
 // ==========================================================
-
 function isAdmin() {
     return isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
 }
@@ -137,7 +178,6 @@ function canEdit() {
 // ==========================================================
 // БЕЗОПАСНАЯ ПРОВЕРКА ЦЕЛОЧИСЛЕННОГО ЗНАЧЕНИЯ
 // ==========================================================
-
 function safeInt($value, $default = 0) {
     return is_numeric($value) ? (int)$value : $default;
 }

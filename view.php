@@ -1,8 +1,9 @@
 <?php
 // ==================================================
-// ФАЙЛ: view.php (С РАБОЧИМ DRAG-AND-DROP)
+// ФАЙЛ: view.php (ИСПРАВЛЕННАЯ ВЕРСИЯ)
 // ==================================================
 require_once 'config.php';
+
 $company_id = (int)($_GET['company'] ?? 0);
 if (!$company_id) {
     header('Location: index.php');
@@ -18,6 +19,7 @@ $role = $_SESSION['role'] ?? 'guest';
 $is_admin = ($role == 'admin');
 $is_editor = ($role == 'editor');
 
+// Проверка доступа к компании
 if ($is_admin) {
     $has_company_access = true;
 } elseif ($user_id > 0) {
@@ -94,6 +96,7 @@ function buildTree($items, $parent_id = 0) {
     }
     return $tree;
 }
+
 $tree = buildTree($filtered_sections);
 
 function hasDraftInSubtree($node) {
@@ -129,6 +132,7 @@ function isActivePath($node_id) {
 function renderTree($tree, $company_id, $can_edit, $prefix = '', $level = 0) {
     $html = '<ul style="list-style:none;padding-left:' . ($level * 20) . 'px;margin:0;">';
     $index = 1;
+    
     foreach ($tree as $node) {
         $current_number = $prefix ? $prefix . '.' . $index : (string)$index;
         $has_children = isset($node['children']) && count($node['children']) > 0;
@@ -136,25 +140,31 @@ function renderTree($tree, $company_id, $can_edit, $prefix = '', $level = 0) {
         $color = $is_draft ? '#999' : '#333';
         $pencil = $is_draft ? '✏️ ' : '';
         $display_style = ($has_children && isActivePath($node['id'])) ? 'block' : 'none';
+        
         $html .= '<li data-id="' . $node['id'] . '" style="padding:4px 0;display:flex;align-items:center;gap:5px;flex-wrap:wrap;position:relative;">';
         $html .= '<span class="tree-number" style="font-weight:600;color:#333;margin-right:4px;font-size:20px;">' . $current_number . '.</span>';
         $html .= '<a href="#" onclick="loadSection(' . $node['id'] . '); return false;" class="tree-link" data-id="' . $node['id'] . '" style="text-decoration:none;color:' . $color . ';font-size:21px;font-weight:normal;font-style:normal;word-wrap:break-word;max-width:100%;">';
         $html .= ($has_children ? '📂 ' : '📄 ') . $pencil . htmlspecialchars($node['title']);
         $html .= '</a>';
+        
         if ($has_children) {
             $html .= '<span class="toggle" onclick="toggleTree(this)" style="cursor:pointer;color:#007bff;font-size:19px;margin-left:6px;">▼</span>';
         }
+        
         if ($can_edit) {
             $html .= '<span class="add-child-btn" data-parent="' . $node['id'] . '" style="cursor:pointer;color:#28a745;font-weight:bold;font-size:23px;background:none;border:none;padding:0 4px;margin-left:auto;" onclick="openCreateSectionModal(' . $company_id . ', ' . $node['id'] . '); return false;">+</span>';
         }
+        
         if ($has_children) {
             $html .= '<div class="sub-tree" style="display:' . $display_style . ';width:100%;">';
             $html .= renderTree($node['children'], $company_id, $can_edit, $current_number, $level + 1);
             $html .= '</div>';
         }
+        
         $html .= '</li>';
         $index++;
     }
+    
     $html .= '</ul>';
     return $html;
 }
@@ -212,199 +222,218 @@ if ($user_id && $section_id) {
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= htmlspecialchars($company['name']) ?> — База знаний</title>
-<link rel="stylesheet" href="style.css">
-<link rel="icon" href="favicon.ico" type="image/x-icon">
-<script src="https://cdn.tiny.cloud/1/pjqumadfpz04wpbwx9l38knboh2zjv707edlllzdfrfdfck6/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
-<style>
-.view-container { display: flex; gap: 0; flex: 1; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); min-height: 600px; position: relative; }
-.tree-panel { width: 23%; min-width: 200px; background: #f8f9fa; border-right: 1px solid #e9ecef; padding: 20px 0; overflow-y: auto; max-height: 80vh; position: sticky; top: 0; align-self: flex-start; }
-.tree-panel h3 { padding: 0 20px 15px; font-size: 21px; color: #1a2a4a; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; }
-.tree-panel h3 .add-root-btn { cursor: pointer; color: #28a745; font-weight: bold; font-size: 25px; background: none; border: none; }
-.tree-menu { padding: 0 20px; }
-.tree-menu ul { list-style: none; padding-left: 0; margin: 0; }
-.tree-menu li { padding: 4px 0; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; position: relative; }
-.tree-menu li .add-child-btn { cursor: pointer; color: #28a745; font-weight: bold; font-size: 23px; background: none; border: none; padding: 0 4px; margin-left: auto; }
-.tree-menu li .add-child-btn:hover { color: #1e7e34; }
-.tree-menu li .tree-link { text-decoration: none; font-size: 21px; font-weight: normal; font-style: normal; text-transform: none; word-wrap: break-word; max-width: 100%; }
-.tree-menu li .tree-link:hover { text-decoration: underline; }
-.tree-menu li.active > .tree-link { font-weight: 600; color: #0056b3 !important; }
-.tree-menu li .toggle { cursor: pointer; color: #007bff; font-size: 19px; margin-left: 4px; user-select: none; }
-.tree-menu li .tree-number { font-weight: 600; color: #333; margin-right: 4px; font-size: 20px; }
-.tree-menu .sub-tree { width: 100%; }
-.content-panel { width: 77%; padding: 30px 35px; overflow-y: auto; max-height: 80vh; background: #ffffff; position: relative; display: flex; flex-direction: column; }
-.content-body { font-size: 15px; line-height: 1.7; color: #333; position: relative; min-height: 300px; overflow-y: auto; flex: 1; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; }
-.content-body p { margin: 0 0 10px 0; }
-.content-body img { max-width: 100%; height: auto; cursor: move; }
-.content-body img.dragging { opacity: 0.5; }
-.content-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
-.content-title { font-size: 24px; color: #1a2a4a; margin: 0; display: flex; align-items: center; gap: 10px; }
-.content-header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.view-counter { font-size: 12px; color: #999; background: transparent; padding: 0; border: none; }
-.btn { padding: 8px 20px; border-radius: 6px; text-decoration: none; font-weight: 500; font-size: 14px; border: none; cursor: pointer; transition: all 0.2s; display: inline-block; }
-.btn-primary { background: #007bff; color: #fff; }
-.btn-primary:hover { background: #0056b3; }
-.btn-success { background: #28a745; color: #fff; }
-.btn-success:hover { background: #1e7e34; }
-.btn-outline { background: transparent; border: 1px solid #ccc; color: #555; }
-.btn-outline:hover { background: #f0f0f0; }
-.btn-danger { background: #dc3545; color: #fff; }
-.btn-danger:hover { background: #bd2130; }
-.btn-warning { background: #ffc107; color: #333; }
-.btn-warning:hover { background: #e0a800; }
-.btn-publish { background: #28a745; color: #fff; }
-.btn-publish:hover { background: #1e7e34; }
-.btn-publish.published { background: #ffc107; color: #333; }
-.btn-publish.published:hover { background: #e0a800; }
-.btn-danger.delete-btn { background: #dc3545; color: #fff; }
-.btn-danger.delete-btn:hover { background: #bd2130; }
-.editor-area { margin-top: 15px; }
-.editor-actions { margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.editor-actions .divider { border-left: 2px solid #ccc; height: 30px; margin: 0 5px; }
-#edit-btn.edit-mode { background: #dc3545 !important; color: #fff !important; border-color: #dc3545 !important; }
-#edit-btn.edit-mode:hover { background: #bd2130 !important; }
-.title-edit-input { width: 100%; padding: 10px; font-size: 20px; font-weight: 600; border: 2px solid #007bff; border-radius: 6px; margin-bottom: 10px; box-sizing: border-box; }
-.title-edit-input:focus { outline: none; border-color: #28a745; }
-.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99999; display: flex; justify-content: center; align-items: center; }
-.modal-box { background: #fff; border-radius: 12px; padding: 30px; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
-.modal-box h3 { margin-top: 0; }
-.modal-box .buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
-.modal-box .btn { min-width: 80px; }
-.modal-box .tree-selector { border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; max-height: 300px; overflow-y: auto; background: #f8f9fa; }
-.modal-box .tree-selector ul { list-style: none; padding-left: 20px; margin: 0; }
-.modal-box .tree-selector li { padding: 4px 0; cursor: pointer; color: #007bff; }
-.modal-box .tree-selector li:hover { text-decoration: underline; }
-.modal-box .tree-selector li.selected { font-weight: 600; color: #0056b3; background: #e9ecef; }
-.modal-box .tree-selector li .tree-link { text-decoration: none; color: #007bff; }
-.modal-box .tree-selector li .tree-link:hover { text-decoration: underline; }
-.notification-container { position: fixed; top: 20px; right: 20px; z-index: 999999; display: flex; flex-direction: column; gap: 10px; max-width: 400px; width: 100%; }
-.notification { padding: 15px 20px; border-radius: 8px; color: #fff; font-size: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; transform: translateX(100%); transition: all 0.4s ease; pointer-events: none; border-left: 5px solid rgba(255,255,255,0.3); }
-.notification.show { opacity: 1; transform: translateX(0); pointer-events: auto; }
-.notification.success { background: #28a745; }
-.notification.error { background: #dc3545; }
-.notification.warning { background: #ffc107; color: #333; }
-.notification.info { background: #007bff; }
-@media (max-width: 768px) {
-    .view-container { flex-direction: column; }
-    .tree-panel { width: 100% !important; min-width: unset; max-height: 300px; border-right: none !important; border-bottom: 1px solid #e9ecef !important; }
-    .content-panel { width: 100% !important; padding: 20px !important; }
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($company['name']) ?> — База знаний</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <!-- CSRF мета-тег (для AJAX-запросов) -->
+    <meta name="csrf-token" content="<?= htmlspecialchars(generateCsrfToken()) ?>">
+    <script src="https://cdn.tiny.cloud/1/pjqumadfpz04wpbwx9l38knboh2zjv707edlllzdfrfdfck6/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+    <style>
+        .view-container { display: flex; gap: 0; flex: 1; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); min-height: 600px; position: relative; }
+        .tree-panel { width: 23%; min-width: 200px; background: #f8f9fa; border-right: 1px solid #e9ecef; padding: 20px 0; overflow-y: auto; max-height: 80vh; position: sticky; top: 0; align-self: flex-start; }
+        .tree-panel h3 { padding: 0 20px 15px; font-size: 21px; color: #1a2a4a; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; }
+        .tree-panel h3 .add-root-btn { cursor: pointer; color: #28a745; font-weight: bold; font-size: 25px; background: none; border: none; }
+        .tree-menu { padding: 0 20px; }
+        .tree-menu ul { list-style: none; padding-left: 0; margin: 0; }
+        .tree-menu li { padding: 4px 0; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; position: relative; }
+        .tree-menu li .add-child-btn { cursor: pointer; color: #28a745; font-weight: bold; font-size: 23px; background: none; border: none; padding: 0 4px; margin-left: auto; }
+        .tree-menu li .add-child-btn:hover { color: #1e7e34; }
+        .tree-menu li .tree-link { text-decoration: none; font-size: 21px; font-weight: normal; font-style: normal; text-transform: none; word-wrap: break-word; max-width: 100%; }
+        .tree-menu li .tree-link:hover { text-decoration: underline; }
+        .tree-menu li.active > .tree-link { font-weight: 600; color: #0056b3 !important; }
+        .tree-menu li .toggle { cursor: pointer; color: #007bff; font-size: 19px; margin-left: 4px; user-select: none; }
+        .tree-menu li .tree-number { font-weight: 600; color: #333; margin-right: 4px; font-size: 20px; }
+        .tree-menu .sub-tree { width: 100%; }
+        .content-panel { width: 77%; padding: 30px 35px; overflow-y: auto; max-height: 80vh; background: #ffffff; position: relative; display: flex; flex-direction: column; }
+        .content-body { font-size: 15px; line-height: 1.7; color: #333; position: relative; min-height: 300px; overflow-y: auto; flex: 1; word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; }
+        .content-body p { margin: 0 0 10px 0; }
+        .content-body img { max-width: 100%; height: auto; cursor: move; }
+        .content-body img.dragging { opacity: 0.5; }
+        .content-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+        .content-title { font-size: 24px; color: #1a2a4a; margin: 0; display: flex; align-items: center; gap: 10px; }
+        .content-header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .view-counter { font-size: 12px; color: #999; background: transparent; padding: 0; border: none; }
+        .btn { padding: 8px 20px; border-radius: 6px; text-decoration: none; font-weight: 500; font-size: 14px; border: none; cursor: pointer; transition: all 0.2s; display: inline-block; }
+        .btn-primary { background: #007bff; color: #fff; }
+        .btn-primary:hover { background: #0056b3; }
+        .btn-success { background: #28a745; color: #fff; }
+        .btn-success:hover { background: #1e7e34; }
+        .btn-outline { background: transparent; border: 1px solid #ccc; color: #555; }
+        .btn-outline:hover { background: #f0f0f0; }
+        .btn-danger { background: #dc3545; color: #fff; }
+        .btn-danger:hover { background: #bd2130; }
+        .btn-warning { background: #ffc107; color: #333; }
+        .btn-warning:hover { background: #e0a800; }
+        .btn-publish { background: #28a745; color: #fff; }
+        .btn-publish:hover { background: #1e7e34; }
+        .btn-publish.published { background: #ffc107; color: #333; }
+        .btn-publish.published:hover { background: #e0a800; }
+        .btn-danger.delete-btn { background: #dc3545; color: #fff; }
+        .btn-danger.delete-btn:hover { background: #bd2130; }
+        .editor-area { margin-top: 15px; }
+        .editor-actions { margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .editor-actions .divider { border-left: 2px solid #ccc; height: 30px; margin: 0 5px; }
+        #edit-btn.edit-mode { background: #dc3545 !important; color: #fff !important; border-color: #dc3545 !important; }
+        #edit-btn.edit-mode:hover { background: #bd2130 !important; }
+        .title-edit-input { width: 100%; padding: 10px; font-size: 20px; font-weight: 600; border: 2px solid #007bff; border-radius: 6px; margin-bottom: 10px; box-sizing: border-box; }
+        .title-edit-input:focus { outline: none; border-color: #28a745; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99999; display: flex; justify-content: center; align-items: center; }
+        .modal-box { background: #fff; border-radius: 12px; padding: 30px; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+        .modal-box h3 { margin-top: 0; }
+        .modal-box .buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
+        .modal-box .btn { min-width: 80px; }
+        .modal-box .tree-selector { border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; max-height: 300px; overflow-y: auto; background: #f8f9fa; }
+        .modal-box .tree-selector ul { list-style: none; padding-left: 20px; margin: 0; }
+        .modal-box .tree-selector li { padding: 4px 0; cursor: pointer; color: #007bff; }
+        .modal-box .tree-selector li:hover { text-decoration: underline; }
+        .modal-box .tree-selector li.selected { font-weight: 600; color: #0056b3; background: #e9ecef; }
+        .modal-box .tree-selector li .tree-link { text-decoration: none; color: #007bff; }
+        .modal-box .tree-selector li .tree-link:hover { text-decoration: underline; }
+        .notification-container { position: fixed; top: 20px; right: 20px; z-index: 999999; display: flex; flex-direction: column; gap: 10px; max-width: 400px; width: 100%; }
+        .notification { padding: 15px 20px; border-radius: 8px; color: #fff; font-size: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; transform: translateX(100%); transition: all 0.4s ease; pointer-events: none; border-left: 5px solid rgba(255,255,255,0.3); }
+        .notification.show { opacity: 1; transform: translateX(0); pointer-events: auto; }
+        .notification.success { background: #28a745; }
+        .notification.error { background: #dc3545; }
+        .notification.warning { background: #ffc107; color: #333; }
+        .notification.info { background: #007bff; }
+        @media (max-width: 768px) {
+            .view-container { flex-direction: column; }
+            .tree-panel { width: 100% !important; min-width: unset; max-height: 300px; border-right: none !important; border-bottom: 1px solid #e9ecef !important; }
+            .content-panel { width: 100% !important; padding: 20px !important; }
+        }
+    </style>
 </head>
 <body>
 <div class="container">
-<?php
-$current_company_name = $company['name'] ?? '';
-$show_search = true;
-include 'header.php';
-?>
-<div class="view-container">
-<div class="tree-panel">
-<h3>
-📂 <?= htmlspecialchars($company['name']) ?>
-<?php if ($can_edit): ?>
-<button class="add-root-btn" onclick="openCreateSectionModal(<?= $company_id ?>, 0)" title="Создать главу">+</button>
-<?php endif; ?>
-</h3>
-<div class="tree-menu" id="tree-container">
-<?php if (!empty($tree)): ?>
-<?= renderTree($tree, $company_id, $can_edit) ?>
-<?php else: ?>
-<p style="padding:15px;color:#999;">Нет разделов</p>
-<?php endif; ?>
+    <?php
+    $current_company_name = $company['name'] ?? '';
+    $show_search = true;
+    include 'header.php';
+    ?>
+    
+    <div class="view-container">
+        <div class="tree-panel">
+            <h3>
+                📂 <?= htmlspecialchars($company['name']) ?>
+                <?php if ($can_edit): ?>
+                    <button class="add-root-btn" onclick="openCreateSectionModal(<?= $company_id ?>, 0)" title="Создать главу">+</button>
+                <?php endif; ?>
+            </h3>
+            <div class="tree-menu" id="tree-container">
+                <?php if (!empty($tree)): ?>
+                    <?= renderTree($tree, $company_id, $can_edit) ?>
+                <?php else: ?>
+                    <p style="padding:15px;color:#999;">Нет разделов</p>
+                <?php endif; ?>
+            </div>
+        </div>
+        
+        <div class="content-panel" id="content-panel">
+            <div class="content-header">
+                <h2 class="content-title" id="section-title">
+                    <?= htmlspecialchars($section_title) ?>
+                </h2>
+                <div class="content-header-right">
+                    <?php if ($user_id): ?>
+                        <button class="star-btn <?= $is_favorite ? 'active' : '' ?>" onclick="toggleFavorite(<?= $section_id ?>)">
+                            <?= $is_favorite ? '⭐ В избранном' : '⭐ В избранное' ?>
+                        </button>
+                    <?php endif; ?>
+                    
+                    <?php if ($can_edit): ?>
+                        <button class="btn btn-primary" id="edit-btn" onclick="toggleEdit()">✏️ Редактировать</button>
+                    <?php else: ?>
+                        <button class="btn btn-sm btn-outline" onclick="toggleFullscreenView()">⛶ Во весь экран</button>
+                    <?php endif; ?>
+                    
+                    <span class="view-counter" id="view-counter">👁️ <?= $views_count ?></span>
+                </div>
+            </div>
+            
+            <div class="content-body" id="content-body">
+                <?= $content ?>
+            </div>
+            
+            <div id="edit-mode" style="display:none;">
+                <input type="text" id="edit-title" class="title-edit-input" value="<?= htmlspecialchars($section_title) ?>" placeholder="Введите название статьи">
+                <div class="editor-area">
+                    <textarea id="my-editor"><?= htmlspecialchars($content) ?></textarea>
+                </div>
+                <div class="editor-actions">
+                    <button class="btn btn-success" id="save-btn" onclick="saveContent(false)">💾 Сохранить</button>
+                    <button class="btn btn-outline" onclick="cancelEdit()">❌ Отмена</button>
+                    <span class="divider"></span>
+                    <button class="btn btn-publish <?= $is_published ? 'published' : '' ?>" id="publish-btn" onclick="togglePublish()">
+                        <?= $is_published ? '✅ Выложено' : '📤 Выложить' ?>
+                    </button>
+                    <button class="btn btn-danger delete-btn" onclick="showDeleteSectionModal()">🗑️ Удалить статью</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="footer">
+        <p>&copy; 2026 База знаний. Все права защищены.</p>
+    </footer>
 </div>
-</div>
-<div class="content-panel" id="content-panel">
-<div class="content-header">
-<h2 class="content-title" id="section-title">
-<?= htmlspecialchars($section_title) ?>
-</h2>
-<div class="content-header-right">
-<?php if ($user_id): ?>
-<button class="star-btn <?= $is_favorite ? 'active' : '' ?>" onclick="toggleFavorite(<?= $section_id ?>)">
-<?= $is_favorite ? '⭐ В избранном' : '⭐ В избранное' ?>
-</button>
-<?php endif; ?>
-<?php if ($can_edit): ?>
-<button class="btn btn-primary" id="edit-btn" onclick="toggleEdit()">✏️ Редактировать</button>
-<?php else: ?>
-<button class="btn btn-sm btn-outline" onclick="toggleFullscreenView()">⛶ Во весь экран</button>
-<?php endif; ?>
-<span class="view-counter" id="view-counter">👁️ <?= $views_count ?></span>
-</div>
-</div>
-<div class="content-body" id="content-body">
-<?= $content ?>
-</div>
-<div id="edit-mode" style="display:none;">
-<input type="text" id="edit-title" class="title-edit-input" value="<?= htmlspecialchars($section_title) ?>" placeholder="Введите название статьи">
-<div class="editor-area">
-<textarea id="my-editor"><?= htmlspecialchars($content) ?></textarea>
-</div>
-<div class="editor-actions">
-<button class="btn btn-success" id="save-btn" onclick="saveContent(false)">💾 Сохранить</button>
-<button class="btn btn-outline" onclick="cancelEdit()">❌ Отмена</button>
-<span class="divider"></span>
-<button class="btn btn-publish <?= $is_published ? 'published' : '' ?>" id="publish-btn" onclick="togglePublish()">
-<?= $is_published ? '✅ Выложено' : '📤 Выложить' ?>
-</button>
-<button class="btn btn-danger delete-btn" onclick="showDeleteSectionModal()">🗑️ Удалить статью</button>
-</div>
-</div>
-</div>
-</div>
-<footer class="footer">
-<p>&copy; 2025 База знаний. Все права защищены.</p>
-</footer>
-</div>
+
 <div class="notification-container" id="notification-container"></div>
+
 <div id="create-section-modal" class="modal-overlay" style="display:none;">
-<div class="modal-box">
-<h3>➕ Создать новый раздел</h3>
-<div style="margin-bottom:15px;">
-<label style="display:block;font-weight:600;">Название раздела</label>
-<input type="text" id="new-section-title" value="Новая статья" placeholder="Введите название" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;font-size:16px;">
+    <div class="modal-box">
+        <h3>➕ Создать новый раздел</h3>
+        <div style="margin-bottom:15px;">
+            <label style="display:block;font-weight:600;">Название раздела</label>
+            <input type="text" id="new-section-title" value="Новая статья" placeholder="Введите название" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;font-size:16px;">
+        </div>
+        <div class="buttons">
+            <button class="btn btn-outline" onclick="closeModal('create-section-modal')">Отмена</button>
+            <button class="btn btn-success" id="create-section-confirm-btn">Создать</button>
+        </div>
+    </div>
 </div>
-<div class="buttons">
-<button class="btn btn-outline" onclick="closeModal('create-section-modal')">Отмена</button>
-<button class="btn btn-success" id="create-section-confirm-btn">Создать</button>
-</div>
-</div>
-</div>
+
 <div id="bzlink-modal" class="modal-overlay" style="display:none;">
-<div class="modal-box">
-<h3> Ссылка на раздел БЗ</h3>
-<p>Выберите раздел из содержания (кликните по нему для выбора):</p>
-<div class="tree-selector" id="bz-tree-selector">Загрузка...</div>
-<div class="buttons">
-<button class="btn btn-outline" onclick="closeModal('bzlink-modal')">Отмена</button>
-<button class="btn btn-success" id="bz-insert-btn" onclick="insertBZLink()">💾 Вставить ссылку</button>
+    <div class="modal-box">
+        <h3>🔗 Ссылка на раздел БЗ</h3>
+        <p>Выберите раздел из содержания (кликните по нему для выбора):</p>
+        <div class="tree-selector" id="bz-tree-selector">Загрузка...</div>
+        <div class="buttons">
+            <button class="btn btn-outline" onclick="closeModal('bzlink-modal')">Отмена</button>
+            <button class="btn btn-success" id="bz-insert-btn" onclick="insertBZLink()">💾 Вставить ссылку</button>
+        </div>
+    </div>
 </div>
-</div>
-</div>
+
 <div id="delete-section-modal" class="modal-overlay" style="display:none;">
-<div class="modal-box">
-<h3>⚠️ Удаление статьи</h3>
-<p>Вы уверены, что хотите удалить эту статью? Это действие необратимо.</p>
-<div class="buttons">
-<button class="btn btn-outline" onclick="closeModal('delete-section-modal')">Отмена</button>
-<button class="btn btn-danger" id="delete-confirm-btn">🗑️ Удалить</button>
+    <div class="modal-box">
+        <h3>⚠️ Удаление статьи</h3>
+        <p>Вы уверены, что хотите удалить эту статью? Это действие необратимо.</p>
+        <div class="buttons">
+            <button class="btn btn-outline" onclick="closeModal('delete-section-modal')">Отмена</button>
+            <button class="btn btn-danger" id="delete-confirm-btn">🗑️ Удалить</button>
+        </div>
+    </div>
 </div>
-</div>
-</div>
+
 <form id="ajax-form" style="display:none;">
-<input type="hidden" name="section_id" id="ajax-section-id" value="<?= $section_id ?>">
-<input type="hidden" name="company_id" id="ajax-company-id" value="<?= $company_id ?>">
+    <input type="hidden" name="section_id" id="ajax-section-id" value="<?= $section_id ?>">
+    <input type="hidden" name="company_id" id="ajax-company-id" value="<?= $company_id ?>">
 </form>
+
 <script>
+// CSRF-токен
+var csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
 function showNotification(message, type = 'success', duration = 5000) {
     const container = document.getElementById('notification-container');
     const el = document.createElement('div');
     el.className = 'notification ' + type;
     el.textContent = message;
     container.appendChild(el);
+    
     setTimeout(() => el.classList.add('show'), 20);
     setTimeout(() => {
         el.classList.remove('show');
@@ -425,58 +454,94 @@ function toggleTree(el) {
     }
 }
 
+// ✅ ИСПРАВЛЕНО: Функция полноэкранного режима
+function toggleFullscreenView() {
+    const contentPanel = document.getElementById('content-panel');
+    if (!document.fullscreenElement) {
+        contentPanel.requestFullscreen().catch(err => {
+            showNotification('Не удалось войти в полноэкранный режим', 'error');
+        });
+    } else {
+        document.exitFullscreen();
+    }
+}
+
 function loadSection(sectionId) {
     if (isEditMode) {
         showNotification('Сначала сохраните или отмените редактирование', 'warning', 7000);
         return;
     }
+    
     document.querySelectorAll('.tree-link').forEach(l => l.parentElement.classList.remove('active'));
     const link = document.querySelector(`.tree-link[data-id="${sectionId}"]`);
     if (link) link.parentElement.classList.add('active');
+    
     fetch('get_section.php?section_id=' + sectionId + '&company_id=<?= $company_id ?>')
-    .then(res => res.json())
-    .then(data => {
-        if (data.error) { showNotification('Ошибка: ' + data.error, 'error', 10000); return; }
-        document.getElementById('section-title').textContent = data.title;
-        document.getElementById('ajax-section-id').value = sectionId;
-        document.getElementById('content-body').innerHTML = data.content || '';
-        if (tinymce.get('my-editor')) {
-            tinymce.get('my-editor').setContent(data.content || '');
-        }
-        document.getElementById('edit-title').value = data.title;
-        const publishBtn = document.getElementById('publish-btn');
-        if (data.is_published) {
-            publishBtn.classList.add('published');
-            publishBtn.textContent = '✅ Выложено';
-        } else {
-            publishBtn.classList.remove('published');
-            publishBtn.textContent = ' Выложить';
-        }
-        const counter = document.getElementById('view-counter');
-        if (counter) counter.textContent = '👁️ ' + (data.views_count || 0);
-        if (document.querySelector('.star-btn')) {
-            fetch('save.php', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'action=get_favorites'})
-            .then(r => r.json())
-            .then(favs => {
-                if (Array.isArray(favs)) {
-                    const isFav = favs.some(f => f.id == sectionId);
-                    const btn = document.querySelector('.star-btn');
-                    if (isFav) { btn.classList.add('active'); btn.innerHTML = '⭐ В избранном'; }
-                    else { btn.classList.remove('active'); btn.innerHTML = '⭐ В избранное'; }
-                }
-            });
-        }
-        recordView(sectionId);
-    })
-    .catch(err => showNotification('Ошибка загрузки: ' + err, 'error', 10000));
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) { showNotification('Ошибка: ' + data.error, 'error', 10000); return; }
+            
+            document.getElementById('section-title').textContent = data.title;
+            document.getElementById('ajax-section-id').value = sectionId;
+            document.getElementById('content-body').innerHTML = data.content || '';
+            
+            if (tinymce.get('my-editor')) {
+                tinymce.get('my-editor').setContent(data.content || '');
+            }
+            
+            document.getElementById('edit-title').value = data.title;
+            
+            const publishBtn = document.getElementById('publish-btn');
+            if (data.is_published) {
+                publishBtn.classList.add('published');
+                publishBtn.textContent = '✅ Выложено';
+            } else {
+                publishBtn.classList.remove('published');
+                publishBtn.textContent = '📤 Выложить';
+            }
+            
+            const counter = document.getElementById('view-counter');
+            if (counter) counter.textContent = '👁️ ' + (data.views_count || 0);
+            
+            if (document.querySelector('.star-btn')) {
+                // ✅ ИСПРАВЛЕНО: Добавлен CSRF-токен
+                const formData = new FormData();
+                formData.append('action', 'get_favorites');
+                formData.append('csrf_token', csrfToken);
+                
+                fetch('save.php', {
+                    method: 'POST',
+                    headers: { 'X-CSRF-Token': csrfToken },
+                    body: formData
+                })
+                .then(r => r.json())
+                .then(favs => {
+                    if (Array.isArray(favs)) {
+                        const isFav = favs.some(f => f.id == sectionId);
+                        const btn = document.querySelector('.star-btn');
+                        if (isFav) { btn.classList.add('active'); btn.innerHTML = '⭐ В избранном'; }
+                        else { btn.classList.remove('active'); btn.innerHTML = '⭐ В избранное'; }
+                    }
+                });
+            }
+            
+            recordView(sectionId);
+        })
+        .catch(err => showNotification('Ошибка загрузки: ' + err, 'error', 10000));
 }
 
 function recordView(section_id) {
     setTimeout(() => {
+        // ✅ ИСПРАВЛЕНО: Добавлен CSRF-токен
+        const formData = new FormData();
+        formData.append('action', 'record_view');
+        formData.append('section_id', section_id);
+        formData.append('csrf_token', csrfToken);
+        
         fetch('save.php', {
             method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'action=record_view&section_id=' + section_id
+            headers: { 'X-CSRF-Token': csrfToken },
+            body: formData
         })
         .then(res => res.json())
         .then(data => {
@@ -498,15 +563,18 @@ function toggleEdit() {
     const editBtn = document.getElementById('edit-btn');
     const contentBody = document.getElementById('content-body');
     const editMode = document.getElementById('edit-mode');
+    
     if (!isEditMode) {
         isEditMode = true;
         contentBody.style.display = 'none';
         editMode.style.display = 'block';
         editBtn.textContent = '✏️ Редактирование';
         editBtn.classList.add('edit-mode');
+        
         if (tinymce.get('my-editor')) {
             tinymce.get('my-editor').setContent(contentBody.innerHTML);
         }
+        
         document.getElementById('edit-title').value = document.getElementById('section-title').textContent;
         document.querySelectorAll('.tree-link').forEach(l => l.classList.add('disabled'));
     } else {
@@ -520,25 +588,32 @@ function saveContent(closeAfter = false) {
         showNotification('Ошибка: раздел не выбран', 'error', 10000);
         return;
     }
+    
     let content = '';
     if (tinymce.get('my-editor')) {
         content = tinymce.get('my-editor').getContent();
     } else {
         content = document.getElementById('my-editor').value;
     }
+    
     const title = document.getElementById('edit-title').value.trim();
     if (!title) {
         showNotification('Название статьи не может быть пустым!', 'error', 10000);
         return;
     }
+    
+    // ✅ ИСПРАВЛЕНО: Добавлен CSRF-токен
     const formData = new FormData();
     formData.append('action', 'save_full');
     formData.append('section_id', section_id);
     formData.append('content', content);
     formData.append('title', title);
     formData.append('roles', '');
+    formData.append('csrf_token', csrfToken);
+    
     fetch('save.php', {
         method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
         body: formData
     })
     .then(res => res.text())
@@ -547,10 +622,11 @@ function saveContent(closeAfter = false) {
             showNotification('✅ Сохранено успешно!', 'success', 3000);
             document.getElementById('section-title').textContent = title;
             document.getElementById('content-body').innerHTML = content;
+            
             const link = document.querySelector(`.tree-link[data-id="${section_id}"]`);
             if (link) {
                 const currentText = link.textContent;
-                const iconMatch = currentText.match(/^([📄])\s*(✏️\s*)?(.*)$/);
+                const iconMatch = currentText.match(/^([📄📂])\s*(✏️\s*)?(.*)$/);
                 if (iconMatch) {
                     const icon = iconMatch[1];
                     const pencil = iconMatch[2] || '';
@@ -559,6 +635,7 @@ function saveContent(closeAfter = false) {
                     link.textContent = title;
                 }
             }
+            
             if (closeAfter) {
                 exitEditMode();
                 updatePublishStatus();
@@ -597,24 +674,32 @@ function togglePublish() {
         showNotification('Ошибка: раздел не выбран', 'error', 10000);
         return;
     }
+    
     if (isEditMode) {
         saveContent(false);
     }
+    
     const publishBtn = document.getElementById('publish-btn');
     const isCurrentlyPublished = publishBtn.classList.contains('published');
     const newStatus = isCurrentlyPublished ? 0 : 1;
+    
+    // ✅ ИСПРАВЛЕНО: Добавлен CSRF-токен
     const formData = new FormData();
     formData.append('action', 'set_publish');
     formData.append('section_id', section_id);
     formData.append('status', newStatus);
+    formData.append('csrf_token', csrfToken);
+    
     fetch('save.php', {
         method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
         body: formData
     })
     .then(res => res.text())
     .then(data => {
         if (data.trim() === 'ok') {
             showNotification(newStatus ? '✅ Статья опубликована!' : '✅ Статья снята с публикации.', 'success', 5000);
+            
             if (newStatus) {
                 publishBtn.classList.add('published');
                 publishBtn.textContent = '✅ Выложено';
@@ -622,6 +707,7 @@ function togglePublish() {
                 publishBtn.classList.remove('published');
                 publishBtn.textContent = '📤 Выложить';
             }
+            
             refreshTree(<?= $company_id ?>);
         } else {
             showNotification('Ошибка: ' + data, 'error', 10000);
@@ -633,19 +719,21 @@ function togglePublish() {
 function updatePublishStatus() {
     const section_id = document.getElementById('ajax-section-id').value;
     if (!section_id) return;
+    
     fetch('get_section.php?section_id=' + section_id + '&company_id=<?= $company_id ?>')
-    .then(res => res.json())
-    .then(data => {
-        if (data.error) return;
-        const publishBtn = document.getElementById('publish-btn');
-        if (data.is_published) {
-            publishBtn.classList.add('published');
-            publishBtn.textContent = '✅ Выложено';
-        } else {
-            publishBtn.classList.remove('published');
-            publishBtn.textContent = ' Выложить';
-        }
-    });
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) return;
+            
+            const publishBtn = document.getElementById('publish-btn');
+            if (data.is_published) {
+                publishBtn.classList.add('published');
+                publishBtn.textContent = '✅ Выложено';
+            } else {
+                publishBtn.classList.remove('published');
+                publishBtn.textContent = '📤 Выложить';
+            }
+        });
 }
 
 function showDeleteSectionModal() {
@@ -654,10 +742,17 @@ function showDeleteSectionModal() {
         showNotification('Ошибка: раздел не выбран', 'error', 10000);
         return;
     }
+    
+    // ✅ ИСПРАВЛЕНО: Добавлен CSRF-токен
+    const formData = new FormData();
+    formData.append('action', 'check_children');
+    formData.append('section_id', section_id);
+    formData.append('csrf_token', csrfToken);
+    
     fetch('save.php', {
         method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'action=check_children&section_id=' + section_id
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: formData
     })
     .then(res => res.text())
     .then(data => {
@@ -665,6 +760,7 @@ function showDeleteSectionModal() {
             showNotification('Нельзя удалить раздел, так как у него есть подразделы. Сначала удалите их.', 'error', 10000);
             return;
         }
+        
         openModal('delete-section-modal');
         document.getElementById('delete-confirm-btn').onclick = function() {
             deleteSection(section_id);
@@ -674,11 +770,15 @@ function showDeleteSectionModal() {
 }
 
 function deleteSection(section_id) {
+    // ✅ ИСПРАВЛЕНО: Добавлен CSRF-токен
     const formData = new FormData();
     formData.append('action', 'delete_section');
     formData.append('section_id', section_id);
+    formData.append('csrf_token', csrfToken);
+    
     fetch('save.php', {
         method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
         body: formData
     })
     .then(res => res.text())
@@ -686,7 +786,9 @@ function deleteSection(section_id) {
         if (data.trim() === 'ok') {
             showNotification('✅ Статья удалена', 'success', 5000);
             closeModal('delete-section-modal');
+            
             if (isEditMode) exitEditMode();
+            
             let parent_id = 0;
             const allSections = <?= json_encode($all_sections) ?>;
             for (let s of allSections) {
@@ -695,6 +797,7 @@ function deleteSection(section_id) {
                     break;
                 }
             }
+            
             if (parent_id > 0) {
                 loadSection(parent_id);
             } else {
@@ -705,6 +808,7 @@ function deleteSection(section_id) {
                     location.reload();
                 }
             }
+            
             refreshTree(<?= $company_id ?>);
         } else if (data === 'has_children') {
             showNotification('Нельзя удалить раздел, так как у него есть подразделы.', 'error', 10000);
@@ -719,16 +823,31 @@ function deleteSection(section_id) {
 function toggleFavorite(section_id) {
     const btn = document.querySelector('.star-btn');
     if (!btn) return;
+    
+    // ✅ ИСПРАВЛЕНО: Добавлен CSRF-токен
+    const formData = new FormData();
+    formData.append('action', 'toggle_favorite');
+    formData.append('section_id', section_id);
+    formData.append('csrf_token', csrfToken);
+    
     fetch('save.php', {
         method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'action=toggle_favorite&section_id=' + section_id
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: formData
     })
     .then(res => res.json())
     .then(data => {
         if (data.error) { showNotification('Ошибка: ' + data.error, 'error', 10000); return; }
-        if (data.status === 'added') { btn.classList.add('active'); btn.innerHTML = '⭐ В избранном'; showNotification('Добавлено в избранное', 'success', 5000); }
-        else { btn.classList.remove('active'); btn.innerHTML = '⭐ В избранное'; showNotification('Удалено из избранного', 'warning', 7000); }
+        
+        if (data.status === 'added') { 
+            btn.classList.add('active'); 
+            btn.innerHTML = '⭐ В избранном'; 
+            showNotification('Добавлено в избранное', 'success', 5000); 
+        } else { 
+            btn.classList.remove('active'); 
+            btn.innerHTML = '⭐ В избранное'; 
+            showNotification('Удалено из избранного', 'warning', 7000); 
+        }
     })
     .catch(err => showNotification('Ошибка: ' + err, 'error', 10000));
 }
@@ -736,6 +855,7 @@ function toggleFavorite(section_id) {
 function openCreateSectionModal(company_id, parent_id) {
     document.getElementById('new-section-title').value = 'Новая статья';
     openModal('create-section-modal');
+    
     document.getElementById('create-section-confirm-btn').onclick = function() {
         const title = document.getElementById('new-section-title').value.trim() || 'Новая статья';
         createSection(company_id, parent_id, title);
@@ -743,13 +863,17 @@ function openCreateSectionModal(company_id, parent_id) {
 }
 
 function createSection(company_id, parent_id, title) {
+    // ✅ ИСПРАВЛЕНО: Добавлен CSRF-токен
     const formData = new FormData();
     formData.append('action', 'create_section');
     formData.append('company_id', company_id);
     formData.append('parent_id', parent_id);
     formData.append('title', title);
+    formData.append('csrf_token', csrfToken);
+    
     fetch('save.php', {
         method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
         body: formData
     })
     .then(res => res.text())
@@ -768,16 +892,17 @@ function createSection(company_id, parent_id, title) {
 function refreshTree(company_id) {
     const container = document.getElementById('tree-container');
     container.innerHTML = '<p style="padding:15px;color:#999;">Загрузка...</p>';
+    
     fetch('get_tree.php?company_id=' + company_id + '&section_id=' + document.getElementById('ajax-section-id').value)
-    .then(res => res.text())
-    .then(html => {
-        container.innerHTML = html;
-        attachTreeEvents();
-    })
-    .catch(err => {
-        container.innerHTML = '<p style="padding:15px;color:#999;">Ошибка обновления дерева</p>';
-        showNotification('Ошибка обновления дерева: ' + err, 'error', 10000);
-    });
+        .then(res => res.text())
+        .then(html => {
+            container.innerHTML = html;
+            attachTreeEvents();
+        })
+        .catch(err => {
+            container.innerHTML = '<p style="padding:15px;color:#999;">Ошибка обновления дерева</p>';
+            showNotification('Ошибка обновления дерева: ' + err, 'error', 10000);
+        });
 }
 
 function attachTreeEvents() {
@@ -794,6 +919,7 @@ function attachTreeEvents() {
             }
         };
     });
+    
     document.querySelectorAll('.add-child-btn').forEach(btn => {
         btn.onclick = function() {
             const company_id = <?= $company_id ?>;
@@ -801,6 +927,7 @@ function attachTreeEvents() {
             openCreateSectionModal(company_id, parent_id);
         };
     });
+    
     document.querySelectorAll('.toggle').forEach(toggle => {
         toggle.onclick = function() {
             const sub = this.parentElement.querySelector('.sub-tree');
@@ -811,6 +938,7 @@ function attachTreeEvents() {
             }
         };
     });
+    
     document.querySelectorAll('.add-root-btn').forEach(btn => {
         btn.onclick = function() {
             openCreateSectionModal(<?= $company_id ?>, 0);
@@ -824,24 +952,27 @@ function openBZLinkModal() {
         showNotification('Выделите текст, который хотите сделать ссылкой', 'warning', 7000);
         return;
     }
+    
     window._bzSelectedText = selection;
     openModal('bzlink-modal');
+    
     document.getElementById('bz-tree-selector').innerHTML = 'Загрузка...';
+    
     fetch('get_tree.php?company_id=<?= $company_id ?>&no_edit=1')
-    .then(res => res.text())
-    .then(html => {
-        document.getElementById('bz-tree-selector').innerHTML = html;
-        document.querySelectorAll('#bz-tree-selector .tree-link').forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                document.querySelectorAll('#bz-tree-selector .tree-link').forEach(l => l.parentElement.classList.remove('selected'));
-                this.parentElement.classList.add('selected');
+        .then(res => res.text())
+        .then(html => {
+            document.getElementById('bz-tree-selector').innerHTML = html;
+            document.querySelectorAll('#bz-tree-selector .tree-link').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    document.querySelectorAll('#bz-tree-selector .tree-link').forEach(l => l.parentElement.classList.remove('selected'));
+                    this.parentElement.classList.add('selected');
+                });
             });
+        })
+        .catch(() => {
+            document.getElementById('bz-tree-selector').innerHTML = '<p style="color:#999;">Ошибка загрузки дерева</p>';
         });
-    })
-    .catch(() => {
-        document.getElementById('bz-tree-selector').innerHTML = '<p style="color:#999;">Ошибка загрузки дерева</p>';
-    });
 }
 
 function insertBZLink() {
@@ -850,15 +981,18 @@ function insertBZLink() {
         showNotification('Выберите раздел', 'error', 10000);
         return;
     }
+    
     const id = selected.dataset.id;
     const title = selected.textContent.trim();
     const url = 'view.php?company=<?= $company_id ?>&section=' + id;
     const linkText = window._bzSelectedText || title;
+    
     tinymce.activeEditor.execCommand('mceInsertLink', false, {
         href: url,
         text: linkText,
         target: '_blank'
     });
+    
     closeModal('bzlink-modal');
     showNotification('Ссылка на раздел вставлена', 'success', 3000);
     window._bzSelectedText = null;
@@ -927,7 +1061,6 @@ tinymce.init({
                         // Загружаем файл через XMLHttpRequest
                         const xhr = new XMLHttpRequest();
                         xhr.open('POST', 'upload.php', true);
-                        
                         xhr.onload = function() {
                             if (xhr.status === 200) {
                                 try {
@@ -943,12 +1076,11 @@ tinymce.init({
                                     showNotification('❌ Ошибка парсинга ответа', 'error', 5000);
                                 }
                             } else {
-                                showNotification(' Ошибка сервера: ' + xhr.status, 'error', 5000);
+                                showNotification('❌ Ошибка сервера: ' + xhr.status, 'error', 5000);
                             }
                         };
-                        
                         xhr.onerror = function() {
-                            showNotification(' Ошибка сети', 'error', 5000);
+                            showNotification('❌ Ошибка сети', 'error', 5000);
                         };
                         
                         const formData = new FormData();
@@ -957,7 +1089,6 @@ tinymce.init({
                         formData.append('section_id', document.getElementById('ajax-section-id').value || '');
                         formData.append('folder', '');
                         formData.append('custom_name', file.name);
-                        
                         xhr.send(formData);
                     }
                 } else if (draggedImage) {
@@ -987,7 +1118,6 @@ tinymce.init({
         return new Promise(function(resolve, reject) {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', 'upload.php', true);
-            
             xhr.onload = function() {
                 if (xhr.status === 200) {
                     try {
@@ -1004,7 +1134,6 @@ tinymce.init({
                     reject('Ошибка сервера: ' + xhr.status);
                 }
             };
-            
             xhr.onerror = function() {
                 reject('Ошибка сети при загрузке файла');
             };
@@ -1015,7 +1144,6 @@ tinymce.init({
             formData.append('section_id', document.getElementById('ajax-section-id').value || '');
             formData.append('folder', '');
             formData.append('custom_name', blobInfo.filename());
-            
             xhr.send(formData);
         });
     }
@@ -1023,6 +1151,7 @@ tinymce.init({
 
 document.addEventListener('DOMContentLoaded', function() {
     attachTreeEvents();
+    
     const activeId = <?= $section_id ?>;
     if (activeId) {
         document.querySelectorAll('.tree-link').forEach(link => {
@@ -1031,6 +1160,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
     updatePublishStatus();
 });
 </script>

@@ -1,6 +1,11 @@
 <?php
 // ==================================================
-// ФАЙЛ: upload.php (загрузка файлов) - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// ФАЙЛ: upload.php (ИСПРАВЛЕННАЯ ВЕРСИЯ)
+// НАЗНАЧЕНИЕ: Загрузка файлов с CSRF-защитой
+// ИСПРАВЛЕНИЯ:
+//   1. Проблема 10: Добавлена CSRF-проверка для всех запросов
+//   2. Проблема 29: mkdir с 0777 → 0755
+//   3. Улучшена защита от path traversal в имени папки
 // ==================================================
 require_once 'config.php';
 
@@ -11,6 +16,16 @@ header('Content-Type: application/json');
 function sendJsonError($message) {
     echo json_encode(['success' => false, 'message' => $message]);
     exit;
+}
+
+// ==========================================================
+// ✅ ИСПРАВЛЕНО (проблема 10): CSRF-ПРОВЕРКА
+// ==========================================================
+// CSRF-токен может быть в POST-данных или в HTTP-заголовке
+$csrf_token = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+if (!verifyCsrfToken($csrf_token)) {
+    http_response_code(403);
+    sendJsonError('Ошибка безопасности. Обновите страницу.');
 }
 
 // Проверяем, что пользователь авторизован
@@ -93,32 +108,64 @@ if (!isset($allowed_mime[$mime_type])) {
 
 $ext = $allowed_mime[$mime_type];
 
-// Формируем путь
+// ==========================================================
+// ФОРМИРУЕМ ПУТЬ (с защитой от path traversal)
+// ==========================================================
 $base_dir = __DIR__ . '/uploads/files/';
 $company_dir = 'company_' . $company_id . '/';
 $full_company_dir = $base_dir . $company_dir;
 
 if (!is_dir($full_company_dir)) {
-    mkdir($full_company_dir, 0777, true);
+    // ✅ ИСПРАВЛЕНО (проблема 29): права 0755 вместо 0777
+    if (!mkdir($full_company_dir, 0755, true)) {
+        sendJsonError('Не удалось создать папку компании');
+    }
 }
 
 $target_dir = $full_company_dir;
 
 if (!empty($folder)) {
-    $folder = str_replace(['..', '/', '\\'], '', $folder);
+    // ✅ ИСПРАВЛЕНО: усиленная защита от path traversal
+    // Удаляем опасные символы и последовательности
+    $folder = str_replace(['..', '/', '\\', "\0"], '', $folder);
+    // Разрешаем только буквы, цифры, пробелы, дефис, подчёркивание и точки
+    $folder = preg_replace('/[^\p{L}\p{N}_\-\s\.]/u', '_', $folder);
+    $folder = trim($folder);
+    
+    if (empty($folder)) {
+        sendJsonError('Недопустимое имя папки');
+    }
+    
     $target_dir .= $folder . '/';
     if (!is_dir($target_dir)) {
-        mkdir($target_dir, 0777, true);
+        if (!mkdir($target_dir, 0755, true)) {
+            sendJsonError('Не удалось создать папку');
+        }
+    }
+    
+    // Дополнительная проверка: путь должен быть внутри base_dir
+    $real_target = realpath($target_dir);
+    $real_base = realpath($base_dir);
+    if ($real_target === false || $real_base === false || strpos($real_target, $real_base) !== 0) {
+        sendJsonError('Небезопасный путь к папке');
     }
 }
 
 // Генерация имени файла с версионированием
 $base_name = pathinfo($original_name, PATHINFO_FILENAME);
+// Ограничиваем длину имени файла
+if (mb_strlen($base_name) > 100) {
+    $base_name = mb_substr($base_name, 0, 100);
+}
+
 $new_filename = $base_name . '.' . $ext;
 $counter = 1;
 while (file_exists($target_dir . $new_filename)) {
     $new_filename = $base_name . '_' . date('Y-m-d_H-i-s') . '_' . $counter . '.' . $ext;
     $counter++;
+    if ($counter > 100) {
+        sendJsonError('Слишком много файлов с таким именем');
+    }
 }
 
 $filepath = $target_dir . $new_filename;

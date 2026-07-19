@@ -1,6 +1,9 @@
 <?php
 // ==================================================
-// ФАЙЛ: file_manager.php (БЕЗОПАСНАЯ ВЕРСИЯ)
+// ФАЙЛ: file_manager.php (ИСПРАВЛЕННАЯ ВЕРСИЯ)
+// НАЗНАЧЕНИЕ: Менеджер файлов компании
+// ИСПРАВЛЕНИЯ:
+//   1. Проблема 29: mkdir с 0777 → 0755
 // ==================================================
 require_once 'config.php';
 
@@ -123,7 +126,8 @@ if ($ajax_action == 'create_folder') {
         exit;
     }
     
-    if (!mkdir($target_dir, 0777, true)) {
+    // ✅ ИСПРАВЛЕНО (проблема 29): права 0755 вместо 0777
+    if (!mkdir($target_dir, 0755, true)) {
         echo json_encode(['error' => 'Не удалось создать папку']);
         exit;
     }
@@ -189,41 +193,41 @@ $can_manage = ($role == 'admin' || $role == 'editor');
 .fm-file .date { color: #999; font-size: 12px; margin-left: 10px; }
 </style>
 <div class="fm-container">
-<?php if ($can_manage): ?>
-<div class="fm-toolbar">
-    <button class="btn btn-sm btn-success" onclick="createFolder()">📁 Создать папку</button>
-    <span style="font-size:12px;color:#999;margin-left:10px;">Выберите файл для вставки</span>
-</div>
-<?php endif; ?>
-
-<?php if (!empty($all_folders)): ?>
-<div style="font-weight:600; margin-bottom:5px;">Папки:</div>
-<?php foreach ($all_folders as $folder): ?>
-    <div class="fm-folder" data-folder="<?= htmlspecialchars($folder) ?>" onclick="toggleFolder(this)">📁 <?= htmlspecialchars($folder ?: 'Корень') ?></div>
-    <div id="folder-<?= md5($folder) ?>" style="padding-left:20px; display: <?= $folder === '' ? 'block' : 'none' ?>;">
-        <?php if (isset($folders[$folder])): ?>
-            <?php foreach ($folders[$folder] as $file): ?>
-                <div class="fm-file" data-id="<?= (int)$file['id'] ?>" data-name="<?= htmlspecialchars($file['original_name']) ?>">
-                    <span class="file-info" onclick="selectFile(<?= (int)$file['id'] ?>, '<?= htmlspecialchars(addslashes($file['original_name'])) ?>')">
-                        📄 <?= htmlspecialchars($file['original_name']) ?>
-                        <span class="size">(<?= round($file['size']/1024, 1) ?> КБ)</span>
-                        <span class="date"><?= date('d.m.Y H:i', strtotime($file['uploaded_at'])) ?></span>
-                    </span>
-                    <?php if ($can_manage): ?>
-                        <span class="file-actions">
-                            <button class="btn btn-sm btn-danger" onclick="deleteFile(<?= (int)$file['id'] ?>)">🗑️</button>
-                        </span>
-                    <?php endif; ?>
-                </div>
-            <?php endforeach; ?>
-        <?php else: ?>
-            <div style="color:#999; padding:4px 0;">Папка пуста</div>
-        <?php endif; ?>
+    <?php if ($can_manage): ?>
+    <div class="fm-toolbar">
+        <button class="btn btn-sm btn-success" onclick="createFolder()">📁 Создать папку</button>
+        <span style="font-size:12px;color:#999;margin-left:10px;">Выберите файл для вставки</span>
     </div>
-<?php endforeach; ?>
-<?php else: ?>
-    <div style="color:#999;">Нет файлов в этой компании</div>
-<?php endif; ?>
+    <?php endif; ?>
+    
+    <?php if (!empty($all_folders)): ?>
+        <div style="font-weight:600; margin-bottom:5px;">Папки:</div>
+        <?php foreach ($all_folders as $folder): ?>
+            <div class="fm-folder" data-folder="<?= htmlspecialchars($folder) ?>" onclick="toggleFolder(this)">📁 <?= htmlspecialchars($folder ?: 'Корень') ?></div>
+            <div id="folder-<?= md5($folder) ?>" style="padding-left:20px; display: <?= $folder === '' ? 'block' : 'none' ?>;">
+                <?php if (isset($folders[$folder])): ?>
+                    <?php foreach ($folders[$folder] as $file): ?>
+                        <div class="fm-file" data-id="<?= (int)$file['id'] ?>" data-name="<?= htmlspecialchars($file['original_name']) ?>">
+                            <span class="file-info" onclick="selectFile(<?= (int)$file['id'] ?>, '<?= htmlspecialchars(addslashes($file['original_name'])) ?>')">
+                                📄 <?= htmlspecialchars($file['original_name']) ?>
+                                <span class="size">(<?= round($file['size']/1024, 1) ?> КБ)</span>
+                                <span class="date"><?= date('d.m.Y H:i', strtotime($file['uploaded_at'])) ?></span>
+                            </span>
+                            <?php if ($can_manage): ?>
+                            <span class="file-actions">
+                                <button class="btn btn-sm btn-danger" onclick="deleteFile(<?= (int)$file['id'] ?>)">🗑️</button>
+                            </span>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div style="color:#999; padding:4px 0;">Папка пуста</div>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+    <?php else: ?>
+        <div style="color:#999;">Нет файлов в этой компании</div>
+    <?php endif; ?>
 </div>
 
 <script>
@@ -240,7 +244,6 @@ function toggleFolder(el) {
 
 // Простая реализация md5 для ID папок
 function md5(str) {
-    // Используем встроенную функцию хэширования
     var hash = 0;
     for (var i = 0; i < str.length; i++) {
         var char = str.charCodeAt(i);
@@ -254,11 +257,14 @@ function selectFile(id, name) {
     document.querySelectorAll('.fm-file').forEach(el => el.classList.remove('selected'));
     const el = document.querySelector(`.fm-file[data-id="${id}"]`);
     if (el) el.classList.add('selected');
+    
     window.selectedFileId = id;
     window.selectedFileName = name;
+    
     if (window.parent.document.getElementById('file-custom-name')) {
         window.parent.document.getElementById('file-custom-name').value = name;
     }
+    
     if (window.parent.onFileSelected) {
         window.parent.onFileSelected(id, name);
     }
@@ -266,6 +272,7 @@ function selectFile(id, name) {
 
 function deleteFile(fileId) {
     if (!confirm('Удалить этот файл?')) return;
+    
     const formData = new FormData();
     formData.append('ajax_action', 'delete_file');
     formData.append('file_id', fileId);
